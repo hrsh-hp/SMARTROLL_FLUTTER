@@ -65,15 +65,6 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # Just to ensure it's only for android and IOS
-  plugin:
-    platforms:
-      android:
-        package: com.example.smartroll
-        pluginClass: SmartRollPlugin
-      ios:
-        pluginClass: SmartRollPlugin
-
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
