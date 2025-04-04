@@ -61,19 +61,18 @@
 		<key>CFBundleURLTypes</key>
 		<array>
 			<dict>
+				<key>CFBundleTypeRole</key>
+				<string>Editor</string>
 				<key>CFBundleURLName</key>
+				<!-- Optional: Use your bundle ID or a descriptive name -->
 				<string>com.yourcompany.smartroll</string>
 				<key>CFBundleURLSchemes</key>
 				<array>
-					<string>smartroll</string>
+					<!-- Your custom scheme -->
+					<string>smartrollauth</string>
 				</array>
 			</dict>
-		</array>
-
-		<!-- Universal Links (if using web-based login redirect) -->
-		<key>com.apple.developer.associated-domains</key>
-		<array>
-			<string>applinks:yourdomain.com</string>
+			<!-- You can add more <dict> entries here if you support multiple schemes -->
 		</array>
 
 	</dict>

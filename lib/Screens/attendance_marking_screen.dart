@@ -118,19 +118,22 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
         String errorMsg = 'Failed to load timetable (${response.statusCode})';
         try {
           final decodedError = jsonDecode(response.body);
-          if (decodedError['message'] != null)
+          if (decodedError['message'] != null) {
             errorMsg = decodedError['message'];
+          }
         } catch (_) {}
         throw Exception(errorMsg);
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         _handleFetchError("Could not fetch timetable: ${e.toString()}");
+      }
     } finally {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _isLoadingTimetable = false;
         });
+      }
     }
   }
   // ---------------------------------------
@@ -263,8 +266,9 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
                     error,
                   ) {
                     // Optional: Handle error if settings cannot be opened
-                    if (mounted)
+                    if (mounted) {
                       _showSnackbar("Could not open settings.", isError: true);
+                    }
                   });
                 },
               ),

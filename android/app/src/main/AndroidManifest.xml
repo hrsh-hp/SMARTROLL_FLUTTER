@@ -30,11 +30,22 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:autoVerify="true"> <!-- autoVerify is optional, useful for App
+                Links -->
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="smartroll" android:host="login" />
+                <!-- Define your scheme and host -->
+                <data android:scheme="smartrollauth" android:host="callback" />
+                <!-- You can add more <data> elements for different schemes/hosts if needed -->
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <data android:scheme="https" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <data android:scheme="http" />
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
