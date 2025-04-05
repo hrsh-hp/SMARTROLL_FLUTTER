@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:app_links/app_links.dart'; // Import the package
-import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // Import secure storage
+import 'package:app_links/app_links.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'Screens/splash_screen.dart';
 
 void main() {
@@ -17,26 +17,24 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  final _appLinks = AppLinks(); // Create an instance of AppLinks
+  final _appLinks = AppLinks();
   final _storage = const FlutterSecureStorage();
-  StreamSubscription<Uri>? _linkSubscription; // To manage the listener
+  StreamSubscription<Uri>? _linkSubscription;
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
     super.initState();
-    // Initialize link handling
     _initDeepLinks();
   }
 
   @override
   void dispose() {
-    // Cancel the stream subscription when the widget is disposed
     _linkSubscription?.cancel();
     super.dispose();
   }
 
   Future<void> _initDeepLinks() async {
-    // --- Handle initial link when app starts ---
     try {
       final initialUri = await _appLinks.getInitialLink();
       if (initialUri != null) {
@@ -49,51 +47,41 @@ class _MyAppState extends State<MyApp> {
       debugPrint('Error getting initial link: $e');
     }
 
-    // --- Listen for incoming links while the app is running ---
     _linkSubscription = _appLinks.uriLinkStream.listen(
       (uri) {
         debugPrint('Link received while running: $uri');
-        // No need to await here, let it process in the background
         _processLink(uri);
       },
       onError: (err) {
         debugPrint('Error listening to link stream: $err');
-        // Handle errors, maybe show a snackbar
       },
     );
   }
 
-  /// Processes the received URI, extracts tokens, stores them.
   Future<void> _processLink(Uri uri) async {
-    // Check if it's our specific callback scheme and host
-    // Make sure 'smartrollauth' and 'callback' match your setup
     if (uri.scheme == 'smartrollauth' && uri.host == 'callback') {
-      // Extract tokens from query parameters
       final String? accessToken = uri.queryParameters['access_token'];
       final String? refreshToken = uri.queryParameters['refresh_token'];
 
-      // Validate tokens
       if (accessToken != null &&
           accessToken.isNotEmpty &&
           refreshToken != null &&
           refreshToken.isNotEmpty) {
         try {
-          // Store tokens securely
           await _storage.write(key: 'accessToken', value: accessToken);
           await _storage.write(key: 'refreshToken', value: refreshToken);
           debugPrint("Tokens stored successfully via deep link!");
 
-          // **Navigation Note:** We don't need to navigate directly here.
-          // Storing the tokens is enough. The SplashScreen will check
-          // storage on the next run/check and navigate accordingly.
-          // This simplifies the logic and avoids potential context issues.
+          // Use the navigator key to push a fresh instance of SplashScreen
+          _navigatorKey.currentState?.pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const SplashScreen()),
+            (route) => false,
+          );
         } catch (e) {
           debugPrint("Failed to store tokens from link: $e");
-          // Optionally show an error message to the user (e.g., via a global snackbar service)
         }
       } else {
         debugPrint("Auth callback received but tokens are missing/empty: $uri");
-        // Optionally show an error
       }
     } else {
       debugPrint("Received link is not the expected auth callback: $uri");
@@ -103,6 +91,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'SmartRoll Attendance',
       theme: ThemeData(
         brightness: Brightness.dark,

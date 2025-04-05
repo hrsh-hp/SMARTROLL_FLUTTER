@@ -1,22 +1,20 @@
 import 'package:app_settings/app_settings.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:location/location.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:smartroll/Screens/login_screen.dart';
 import 'package:smartroll/Screens/manual_marking_dialouge.dart'; // Ensure this path is correct
+import 'package:smartroll/utils/Constants.dart';
+import 'package:smartroll/utils/auth_service.dart';
 import 'dart:io';
 import 'splash_screen.dart'; // Ensure this path is correct
 import 'error_screen.dart'; // Ensure this path is correct
 
 // --- Centralized Configuration ---
-const String _backendBaseUrl = "https://smartroll.mnv-dev.site";
-const String _hardcodedAccessToken =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzQzNzkwMjU1LCJpYXQiOjE3NDM2MTc0NTUsImp0aSI6IjczMWZlY2RiZDdkZDQyMjhiNzI5MDEyMGVmMDQxZGVjIiwidXNlcl9pZCI6MTkyOSwib2JqIjp7InNsdWciOiIyNzU3NzNfMTczMTMwODQ5MSIsInByb2ZpbGUiOnsibmFtZSI6IlNoYWggTWFuYXYgS2F1c2hhbGt1bWFyIiwiZW1haWwiOiIyMmNzbWFuMDMzQGxkY2UuYWMuaW4iLCJyb2xlIjoic3R1ZGVudCJ9LCJzcl9ubyI6MjYsImVucm9sbG1lbnQiOiIyMjAyODMxMDcwMzMiLCJicmFuY2giOnsiYnJhbmNoX25hbWUiOiJURVNUX0JSQU5DSF9GT1JfQ09SRV9URUFNIiwic2x1ZyI6IjU1NmE3OGRhOTRiOTQ3MGVfMTczMjQ3MjY3NTMwNCJ9fX0.p01YPVUyKfqKuYuLtLc3H6N8Pgjk7d51DME0sp_pNgY";
-// "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzQzOTQ1NzI3LCJpYXQiOjE3NDM3NzI5MjcsImp0aSI6ImYyMTc5MjgxMWM5OTQ3NzJiNTBiZjI4NTFhYjU1NWZlIiwidXNlcl9pZCI6Mjg2Miwib2JqIjp7InNsdWciOiJlNGQ1YTlkYzMzZTM0NTQ4XzE3MzIwMDUxOTIyOTkiLCJwcm9maWxlIjp7Im5hbWUiOiJKQU5JIEhBUlNIIE5BUkVTSEJIQUkgIiwiZW1haWwiOiJqYW5paGFyc2g3OTRAZ21haWwuY29tIiwicm9sZSI6InN0dWRlbnQifSwic3Jfbm8iOjIyLCJlbnJvbGxtZW50IjoiMjIwMjgwMTUyMDIyIiwiYnJhbmNoIjp7ImJyYW5jaF9uYW1lIjoiQVJUSUZJQ0lBTCBJTlRFTExJR0VOQ0UgQU5EIE1BQ0hJTkUgTEVBUk5JTkciLCJzbHVnIjoiMzMyNTYxXzE3MzExNDczOTAifX19.jBuNZhGLjjPPpVE99to7MWj1xEBSC9CuboBa83JKBBk";
-// ---------------------------------
+const String _backendBaseUrl = backendBaseUrl;
 
 class AttendanceMarkingScreen extends StatefulWidget {
   const AttendanceMarkingScreen({super.key});
@@ -27,8 +25,8 @@ class AttendanceMarkingScreen extends StatefulWidget {
 }
 
 class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
   final Location _location = Location();
+  final AuthService _authService = AuthService();
 
   // --- State Variables (Original Names) ---
   bool _isLoadingTimetable = true;
@@ -55,8 +53,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
       _isLoadingTimetable = true;
       _fetchErrorMessage = null;
     });
-    // _accessToken = await _storage.read(key: 'accessToken');
-    _accessToken = _hardcodedAccessToken; // Using constant for example
+    _accessToken = await secureStorage.read(key: 'accessToken');
+    // _accessToken = _hardcodedAccessToken; // Using constant for example
     if (_accessToken == null || _accessToken!.isEmpty) {
       _handleCriticalError("Authentication token missing. Please login again.");
       return;
@@ -345,7 +343,62 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
       );
       if (!mounted) return;
       final responseData = jsonDecode(response.body);
-      if (response.statusCode == 200) {
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        debugPrint("Received 401/403. Attempting token refresh...");
+        // Attempt refresh using the service
+        final refreshSuccess = await _authService.attemptTokenRefresh();
+
+        if (refreshSuccess == RefreshStatus.success) {
+          debugPrint("Refresh successful. Retrying original request...");
+          // Get the NEW access token
+          String? newAccessToken = await secureStorage.read(key: 'accessToken');
+          if (newAccessToken != null && newAccessToken.isNotEmpty) {
+            // Retry the original request with the new token
+            final retryResponse = await http.post(
+              Uri.parse(
+                '$backendBaseUrl/api/manage/session/mark_attendance_for_student/',
+              ),
+              headers: {
+                'Authorization': 'Bearer $newAccessToken', // Use NEW token
+                'Content-Type': 'application/json',
+              },
+              body: jsonEncode(requestBody),
+            );
+
+            // Handle the retryResponse (check status code 200, etc.)
+            if (retryResponse.statusCode == 200) {
+              // Process successful retry...
+              _showSnackbar('Attendance marked successfully!', isError: false);
+              await _fetchTimetableData(showLoading: false); // Refresh UI
+            } else {
+              // Retry also failed
+              throw Exception(
+                'Failed to mark attendance after refresh (${retryResponse.statusCode})',
+              );
+            }
+          } else {
+            // Should not happen if refreshSuccess is true, but handle defensively
+            throw Exception(
+              'Refresh reported success but new token is missing.',
+            );
+          }
+        } else {
+          // Refresh failed, logout and navigate
+          debugPrint("Refresh failed. Logging out.");
+          await _authService.clearTokens(); // Clear tokens
+          if (mounted) {
+            // Ensure widget is still mounted before navigating
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const LoginScreen()),
+              (route) => false,
+            );
+            // Show a message *after* navigation or on LoginScreen
+            // _showSnackbar('Session expired. Please log in again.', isError: true);
+          }
+          return; // Stop further processing in this function
+        }
+      } else if (response.statusCode == 200) {
         if (responseData['data'] == true && responseData['code'] == 100) {
           _showSnackbar(
             reason == null ? 'Attendance marked!' : 'Manual request submitted!',
@@ -437,7 +490,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
 
   // --- UI Helpers (Unchanged) ---
   void _handleLogout() async {
-    await _storage.deleteAll();
+    await secureStorage.deleteAll();
     if (mounted) {
       Navigator.pushAndRemoveUntil(
         context,

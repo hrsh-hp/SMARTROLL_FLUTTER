@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart'; // Import url_launcher
 
@@ -9,22 +13,47 @@ class LoginScreen extends StatelessWidget {
 
   // URL of your web portal's login page that handles auth
   static const String _webPortalLoginUrl =
-      "https://smartroll.mnv-dev.site/login"; // EXAMPLE URL
+      "https://540b-2409-40c1-1033-b87e-6d84-b340-c6fc-fec0.ngrok-free.app/login"; // EXAMPLE URL
   // The custom URL scheme and host configured for your app
   static const String _appCallbackUrl = "smartrollauth://callback";
 
+  // TO featch device ID
+  Future<String?> _getDeviceId() async {
+    final deviceInfo = DeviceInfoPlugin();
+    try {
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfo.androidInfo;
+        return androidInfo.id;
+      } else if (Platform.isIOS) {
+        final iosInfo = await deviceInfo.iosInfo;
+        return iosInfo.identifierForVendor;
+      }
+    } catch (e) {
+      debugPrint("Error getting device ID: $e");
+    }
+    return null;
+  }
+
   /// Constructs the login URL and launches it in an external browser.
   Future<void> _launchLoginUrl(BuildContext context) async {
-    // Construct the URL to open in the browser.
-    // We pass the app's callback URL as 'redirect_uri' (or similar param your web expects)
-    // and a flag 'from_app=true' so the web frontend knows it was called from the app.
-    final Uri loginUri = Uri.parse(
-      "$_webPortalLoginUrl?redirect_uri=${Uri.encodeComponent(_appCallbackUrl)}&from_app=true",
-    );
-
-    debugPrint("Attempting to launch URL: $loginUri");
-
     try {
+      final deviceId = await _getDeviceId();
+      if (!context.mounted) return;
+
+      if (deviceId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not get device identifier')),
+        );
+        return;
+      }
+
+      final Uri loginUri = Uri.parse(
+        "$_webPortalLoginUrl?redirect_uri=${Uri.encodeComponent(_appCallbackUrl)}&from_app=true&device_id=${Uri.encodeComponent(base64Encode(utf8.encode(deviceId)))}",
+      );
+
+      debugPrint("Attempting to launch URL: $loginUri");
+
+      // try {
       // Attempt to launch the URL in an external browser application.
       final bool launched = await launchUrl(
         loginUri,
