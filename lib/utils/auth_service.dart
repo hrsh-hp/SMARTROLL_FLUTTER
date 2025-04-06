@@ -40,7 +40,7 @@ class AuthService {
       // Use the specific endpoint from your original splash screen
       final response = await http
           .get(Uri.parse("$_backendBaseUrl/api/check_server_avaibility"))
-          .timeout(const Duration(seconds: 5)); // Keep timeout reasonable
+          .timeout(const Duration(seconds: 10)); // Keep timeout reasonable
       // Check status code and potentially response body as before
       final responseData = jsonDecode(response.body);
       return response.statusCode == 200 && responseData['data'] == true;

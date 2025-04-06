@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:smartroll/utils/Constants.dart';
 import 'dart:async';
 
 // Import the AuthService and Enums
@@ -20,6 +21,7 @@ class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   // Instantiate the AuthService
   final AuthService _authService = AuthService();
+  final SecurityService _securityService = SecurityService();
 
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
@@ -53,8 +55,45 @@ class _SplashScreenState extends State<SplashScreen>
     await Future.delayed(const Duration(milliseconds: 500));
 
     Widget nextPage;
+    Map<String, bool> securityStatus = {}; // To hold results
 
     try {
+      try {
+        securityStatus = await _securityService.runAllChecks();
+        debugPrint(
+          "Security Status: Compromised: ${securityStatus['isCompromised']}, DevMode: ${securityStatus['isDeveloperModeEnabled']}",
+        );
+      } catch (e) {
+        debugPrint("Error running security checks: $e");
+        // Initialize with defaults if checks fail
+        securityStatus = {
+          'isCompromised': false,
+          'isDeveloperModeEnabled': false,
+        };
+      }
+      if (securityStatus['isecuritysCompromised'] == true) {
+        debugPrint(
+          "Security check failed (Root/Jailbreak or DevMode ON). Blocking app.",
+        );
+        String msg =
+            securityStatus['isCompromised'] == true
+                ? "on rooted/jailbroken devices"
+                : "when Developer Options are enabled";
+        nextPage = ErrorScreen(
+          message:
+              "For security reasons, this app cannot run $msg. Please disable these settings.",
+          // showRetryButton: false, // No point retrying without changing settings
+        );
+        // Navigate immediately and stop further checks
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => nextPage),
+          );
+        }
+        return;
+      }
+
       // Use AuthService to check server
       final serverAvailable = await _authService.checkServerAvailability();
       if (!mounted) return;
@@ -92,13 +131,13 @@ class _SplashScreenState extends State<SplashScreen>
               // Use AuthService to clear tokens
               await _authService.clearTokens();
               // Navigate to Login
-              nextPage = const LoginScreen();
+              nextPage = LoginScreen();
             }
             break;
 
           case TokenStatus.noToken:
             debugPrint("SplashScreen - No token found.");
-            nextPage = const LoginScreen();
+            nextPage = LoginScreen();
             break;
 
           case TokenStatus.networkError:
@@ -110,7 +149,7 @@ class _SplashScreenState extends State<SplashScreen>
             // Use AuthService to clear tokens
             await _authService.clearTokens();
             // Navigate to Login
-            nextPage = const LoginScreen();
+            nextPage = LoginScreen();
             break;
         }
       }

@@ -4,12 +4,11 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:location/location.dart';
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:smartroll/Screens/login_screen.dart';
 import 'package:smartroll/Screens/manual_marking_dialouge.dart'; // Ensure this path is correct
 import 'package:smartroll/utils/Constants.dart';
 import 'package:smartroll/utils/auth_service.dart';
-import 'dart:io';
+import 'package:smartroll/utils/device_id_service.dart';
 import 'splash_screen.dart'; // Ensure this path is correct
 import 'error_screen.dart'; // Ensure this path is correct
 
@@ -27,6 +26,8 @@ class AttendanceMarkingScreen extends StatefulWidget {
 class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
   final Location _location = Location();
   final AuthService _authService = AuthService();
+  final deviceIdService = DeviceIDService();
+  final SecurityService _securityService = SecurityService();
 
   // --- State Variables (Original Names) ---
   bool _isLoadingTimetable = true;
@@ -38,6 +39,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
   // State for button disabling and loading indicators per lecture
   final Map<String, bool> _isMarkingLecture = {};
   final Map<String, String> _markingInitiator = {};
+  // Animation controller for the shimmer effect
+  late AnimationController _shimmerController;
   // ---------------------
 
   @override
@@ -70,13 +73,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
   }
 
   Future<void> _getAndStoreDeviceId() async {
-    final deviceInfo = DeviceInfoPlugin();
     try {
-      if (Platform.isAndroid) {
-        _deviceId = (await deviceInfo.androidInfo).id;
-      } else if (Platform.isIOS) {
-        _deviceId = (await deviceInfo.iosInfo).identifierForVendor;
-      }
+      _deviceId = await deviceIdService.getUniqueDeviceId();
       debugPrint("Device ID: $_deviceId");
     } catch (e) {
       debugPrint("Error getting device ID: $e");
@@ -206,8 +204,19 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
         await _location.changeSettings(accuracy: LocationAccuracy.high);
         // Attempt to get location with a timeout
         LocationData locationData = await _location.getLocation().timeout(
-          const Duration(seconds: 15),
+          const Duration(seconds: 10),
         );
+        if (locationData.isMock == true) {
+          // Check if isMock is explicitly true
+          debugPrint("Mock location detected!");
+          if (mounted) {
+            _showSnackbar(
+              "Mock location detected. Attendance marking disabled.",
+              isError: true,
+            );
+          }
+          return null; // Return null to prevent marking
+        }
         return locationData;
       } catch (e) {
         // Handle errors during location fetching (e.g., timeout, platform exception)
@@ -282,6 +291,38 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
 
     final String initiator = reason == null ? 'auto' : 'manual';
     if (!mounted) return;
+
+    bool devModeEnabledNow = false;
+    try {
+      // Assuming you have access to SecurityService instance (_securityService)
+      devModeEnabledNow = await _securityService.isDeveloperModeEnabled();
+    } catch (e) {
+      debugPrint("Error re-checking dev mode: $e");
+    }
+
+    if (devModeEnabledNow) {
+      debugPrint("Developer mode detected at time of marking. Aborting.");
+      if (mounted) {
+        // _showSnackbar(
+        //   "Attendance marking disabled while Developer Options are active.",
+        //   isError: true,
+        // );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder:
+                (context) => ErrorScreen(
+                  message:
+                      "Attendance marking disabled while Developer Options are active.",
+                  // showRetryButton: false,
+                ),
+          ),
+        );
+      }
+      // _resetMarkingState(lectureSlug); // Reset UI if needed
+      return; // Stop the marking process
+    }
+
     setState(() {
       _isMarkingLecture[lectureSlug] = true;
       _markingInitiator[lectureSlug] = initiator;
@@ -343,7 +384,20 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
       );
       if (!mounted) return;
       final responseData = jsonDecode(response.body);
-      if (response.statusCode == 401 || response.statusCode == 403) {
+      if (response.statusCode == 200) {
+        if (responseData['data'] == true && responseData['code'] == 100) {
+          _showSnackbar(
+            reason == null ? 'Attendance marked!' : 'Manual request submitted!',
+            isError: false,
+          );
+          await _fetchTimetableData(showLoading: false); // Refresh silently
+        } else {
+          throw Exception(
+            responseData['message'] ??
+                (reason == null ? 'Failed to mark' : 'Failed to submit'),
+          );
+        }
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
         debugPrint("Received 401/403. Attempting token refresh...");
         // Attempt refresh using the service
         final refreshSuccess = await _authService.attemptTokenRefresh();
@@ -390,26 +444,13 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
             // Ensure widget is still mounted before navigating
             Navigator.pushAndRemoveUntil(
               context,
-              MaterialPageRoute(builder: (context) => const LoginScreen()),
+              MaterialPageRoute(builder: (context) => LoginScreen()),
               (route) => false,
             );
             // Show a message *after* navigation or on LoginScreen
             // _showSnackbar('Session expired. Please log in again.', isError: true);
           }
           return; // Stop further processing in this function
-        }
-      } else if (response.statusCode == 200) {
-        if (responseData['data'] == true && responseData['code'] == 100) {
-          _showSnackbar(
-            reason == null ? 'Attendance marked!' : 'Manual request submitted!',
-            isError: false,
-          );
-          await _fetchTimetableData(showLoading: false); // Refresh silently
-        } else {
-          throw Exception(
-            responseData['message'] ??
-                (reason == null ? 'Failed to mark' : 'Failed to submit'),
-          );
         }
       } else {
         String errorMessage = responseData['message'] ?? 'Server error';
@@ -579,9 +620,10 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
   // --- Body Builder with Dividers and Styled Header ---
   Widget _buildBodyWithDividers() {
     if (_isLoadingTimetable) {
-      return const Center(
-        child: CircularProgressIndicator(color: Colors.blueAccent),
-      );
+      // return const Center(
+      //   // child: CircularProgressIndicator(color: Colors.blueAccent),
+      // );
+      return _buildLoadingShimmer();
     }
     if (_fetchErrorMessage != null) {
       return _buildErrorState();
@@ -735,23 +777,39 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
   Widget _buildLectureCard(dynamic lecture) {
     // Use original keys
     final String lectureSlug = lecture['slug'];
-    final bool isMarked = lecture['attendance_marked'] ?? false;
+    final sessionData =
+        lecture['session']
+            as Map<String, dynamic>?; // Get the session map safely
+    final attendanceData =
+        sessionData?['attendances']
+            as Map<String, dynamic>?; // Get attendance map safely
+    // Determine status based on the new structure
+    final bool isMarked = attendanceData?['is_present'] ?? false;
+    final bool isManuallyMarked =
+        attendanceData?['manual'] ?? false; // Might be useful later
+    final bool isRegulizationRequested =
+        attendanceData?['regulization_request'] ?? false; // *** NEW FLAG ***
+    final String? markingTime =
+        attendanceData?['marking_time']; // Might be useful later
+
+    final String? activeStatus =
+        sessionData?['active']?.toString().toLowerCase(); // Get active status
+
+    // --- Other existing data extraction (adjust paths if needed) ---
     final String subjectName =
         lecture['subject']?['subject_map']?['subject_name'] ??
         'Unknown Subject';
     final String subjectCode =
         lecture['subject']?['subject_map']?['subject_code'] ?? '';
-    final String teacherName =
-        lecture['teacher'] ?? 'N/A'; // Assuming direct name access
+    final String teacherName = lecture['teacher'] ?? 'N/A';
     final String classroom = lecture['classroom']?['class_name'] ?? 'N/A';
-    final String lectureType = lecture['type']?.toString().toUpperCase() ?? '';
+    final String lectureType =
+        lecture['type']?.toString().toUpperCase() ??
+        ''; // Assuming type is still top-level
 
-    // Button states
+    // Button states (remain the same)
     final bool isCurrentlyMarking = _isMarkingLecture[lectureSlug] ?? false;
     final String? initiator = _markingInitiator[lectureSlug];
-    //getting the active status
-    final String? activeStatus =
-        lecture['session']?['active']?.toString().toLowerCase();
 
     // Return the Card structure from your original code
     return Padding(
@@ -807,10 +865,16 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
                       ],
                     ),
                   ),
-                  if (isMarked)
-                    _buildAttendanceStatusChip(isMarked)
-                  else if (activeStatus == 'post')
-                    _buildAttendanceStatusChip(isMarked),
+                  if (isMarked || isManuallyMarked || isRegulizationRequested)
+                    _buildAttendanceStatusChip(
+                      isMarked || isManuallyMarked,
+                      isRegulizationRequested,
+                    ),
+                  // else if (activeStatus == 'post')
+                  //   _buildAttendanceStatusChip(
+                  //     isMarked || isManuallyMarked,
+                  //     isRegulizationRequested,
+                  //   ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -873,7 +937,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
                 ],
               ),
               // Action Buttons (with correct disabling and loading)
-              if (!isMarked) ...[
+              if (!isMarked && !isManuallyMarked) ...[
                 const SizedBox(height: 16), // Space before actions/status
                 // Determine what to show based on activeStatus
                 _buildActionOrStatusWidget(
@@ -881,6 +945,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
                   lecture,
                   isCurrentlyMarking,
                   initiator,
+                  isRegulizationRequested,
                 ),
               ],
             ],
@@ -896,164 +961,159 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
     dynamic lecture,
     bool isCurrentlyMarking,
     String? initiator,
+    bool isRegulizationRequested,
   ) {
-    switch (activeStatus) {
-      case 'ongoing':
-        // Show the buttons if the session is ongoing
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            // Mark Attendance Button
-            ElevatedButton(
-              onPressed:
-                  isCurrentlyMarking
-                      ? null
-                      : () => _handleMarkAttendance(lecture),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                disabledBackgroundColor: Colors.grey.shade700,
-                disabledForegroundColor: Colors.grey.shade400,
+    final bool isMarked =
+        lecture['session']?['attendances']?['is_present'] ?? false;
+    if (activeStatus == 'ongoing') {
+      // Show the buttons if the session is ongoing
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Mark Attendance Button
+          ElevatedButton(
+            onPressed:
+                isMarked || isCurrentlyMarking
+                    ? null
+                    : () => _handleMarkAttendance(lecture),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
               ),
-              child:
-                  isCurrentlyMarking && initiator == 'auto'
-                      ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.black,
-                          ),
-                        ),
-                      )
-                      : const Text(
-                        'Mark Attendance',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
+              disabledBackgroundColor: Colors.grey.shade700,
+              disabledForegroundColor: Colors.grey.shade400,
+            ),
+            child:
+                isCurrentlyMarking && initiator == 'auto'
+                    ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
                       ),
-            ),
-            // Manual Marking Button
-            ElevatedButton(
-              onPressed:
-                  isCurrentlyMarking
-                      ? null
-                      : () => _showManualMarkingDialog(lecture),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue[800],
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                disabledBackgroundColor: Colors.grey.shade700,
-                disabledForegroundColor: Colors.grey.shade400,
-              ),
-              child:
-                  isCurrentlyMarking && initiator == 'manual'
-                      ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
-                          ),
-                        ),
-                      )
-                      : const Text(
-                        'Manual Marking',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    )
+                    : const Text(
+                      'Mark Attendance',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                       ),
-            ),
-          ],
-        );
-
-      case 'pre':
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 1.0),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.grey[900],
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                'Session Not Started Yet!',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.orangeAccent.shade200,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ),
+                    ),
           ),
-        );
-
-      case 'post':
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 1.0),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.grey[900],
-                borderRadius: BorderRadius.circular(10),
+          // Manual Marking Button
+          ElevatedButton(
+            onPressed:
+                isMarked || isCurrentlyMarking || isRegulizationRequested
+                    ? null
+                    : () => _showManualMarkingDialog(lecture),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue[800],
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
               ),
-              child: Text(
-                'Session Ended',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[500],
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
+              disabledBackgroundColor: Colors.grey.shade700,
+              disabledForegroundColor: Colors.grey.shade400,
             ),
+            child:
+                isCurrentlyMarking && initiator == 'manual'
+                    ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                    : const Text(
+                      'Manual Marking',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
           ),
-        );
-
-      default:
-        // Show nothing if status is null or unexpected
-        // Add padding to maintain card height consistency if needed
-        return const SizedBox(height: 44); // Approx height of buttons row
-      // return const SizedBox.shrink(); // Or truly nothing
+        ],
+      );
+    } else {
+      // Show nothing if status is null or unexpected
+      // Add padding to maintain card height consistency if needed
+      // return const SizedBox(height: 10); // Approx height of buttons row
+      return const SizedBox.shrink(); // Or truly nothing
     }
   }
 
-  Widget _buildAttendanceStatusChip(bool status) {
+  Widget _buildAttendanceStatusChip(
+    bool isPresent,
+    bool isRegulizationRequested,
+  ) {
+    String statusText;
+    Color chipColor;
+
+    if (isPresent) {
+      // If marked present, that's the final status, regardless of requests.
+      statusText = 'Present';
+      chipColor = Colors.green.shade700; // Consistent green
+    } else {
+      // If not present, check if a request is pending.
+      if (isRegulizationRequested) {
+        statusText = 'Pending'; // Changed from "Pandin"
+        chipColor =
+            Colors
+                .orange
+                .shade800; // Use a distinct color like orange for pending
+      } else {
+        // Not present and no request pending means Absent.
+        statusText = 'Absent';
+        chipColor = Colors.red.shade700; // Consistent red
+      }
+    }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 5,
+      ), // Adjusted padding slightly
       decoration: BoxDecoration(
-        color: status ? Colors.green[700] : Colors.red[700],
-        borderRadius: BorderRadius.circular(20),
+        color: chipColor,
+        borderRadius: BorderRadius.circular(15), // Adjusted radius slightly
       ),
-      child: Text(
-        status ? 'Present' : 'Absent',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
+      child: Row(
+        // Optional: Add an icon for clarity
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Optional Icon based on status
+          if (isPresent)
+            const Icon(
+              Icons.check_circle_outline,
+              size: 14,
+              color: Colors.white,
+            )
+          else if (isRegulizationRequested)
+            const Icon(
+              Icons.hourglass_top_rounded,
+              size: 14,
+              color: Colors.white,
+            )
+          else
+            const Icon(Icons.cancel_outlined, size: 14, color: Colors.white),
+
+          if (isPresent || isRegulizationRequested || !isPresent)
+            const SizedBox(width: 4), // Add space if icon exists
+
+          Text(
+            statusText,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1086,6 +1146,176 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // --- Helper: Loading State Widget ---
+  Widget _buildLoadingShimmer() {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      itemCount: 2, // Show 2 skeleton groups
+      itemBuilder: (context, groupIndex) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Branch name shimmer
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 4,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: Colors.blueAccent,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  AnimatedBuilder(
+                    animation: _shimmerController,
+                    builder: (context, child) {
+                      return Container(
+                        width: 200,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.grey[800]!,
+                              Colors.grey[600]!,
+                              Colors.grey[800]!,
+                            ],
+                            stops: [0.0, _shimmerController.value, 1.0],
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            // Lecture card shimmers
+            ...List.generate(3, (index) => _buildShimmerCard()),
+            const SizedBox(height: 16),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildShimmerCard() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.grey[850]!, width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        AnimatedBuilder(
+                          animation: _shimmerController,
+                          builder: (context, child) {
+                            return Container(
+                              width: double.infinity,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.grey[800]!,
+                                    Colors.grey[600]!,
+                                    Colors.grey[800]!,
+                                  ],
+                                  stops: [0.0, _shimmerController.value, 1.0],
+                                ),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        AnimatedBuilder(
+                          animation: _shimmerController,
+                          builder: (context, child) {
+                            return Container(
+                              width: 120,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.grey[800]!,
+                                    Colors.grey[600]!,
+                                    Colors.grey[800]!,
+                                  ],
+                                  stops: [0.0, _shimmerController.value, 1.0],
+                                ),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ...List.generate(
+                3,
+                (index) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        index == 0
+                            ? Icons.access_time
+                            : index == 1
+                            ? Icons.person_outline
+                            : Icons.location_on_outlined,
+                        size: 16,
+                        color: Colors.grey[400],
+                      ),
+                      const SizedBox(width: 8),
+                      AnimatedBuilder(
+                        animation: _shimmerController,
+                        builder: (context, child) {
+                          return Container(
+                            width: 150,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.grey[800]!,
+                                  Colors.grey[600]!,
+                                  Colors.grey[800]!,
+                                ],
+                                stops: [0.0, _shimmerController.value, 1.0],
+                              ),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

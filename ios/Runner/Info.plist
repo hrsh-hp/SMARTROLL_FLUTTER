@@ -75,5 +75,15 @@
 			<!-- You can add more <dict> entries here if you support multiple schemes -->
 		</array>
 
+		<!-- Jailbroken check -->
+		<key>LSApplicationQueriesSchemes</key>
+		<array>
+			<string>undecimus</string>
+			<string>sileo</string>
+			<string>zbra</string>
+			<string>filza</string>
+			<string>activator</string>
+		</array>
+
 	</dict>
 </plist>
