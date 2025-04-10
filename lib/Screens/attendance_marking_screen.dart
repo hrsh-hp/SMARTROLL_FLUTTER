@@ -1,4 +1,5 @@
 import 'package:app_settings/app_settings.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -23,7 +24,8 @@ class AttendanceMarkingScreen extends StatefulWidget {
       _AttendanceMarkingScreenState();
 }
 
-class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
+class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
+    with SingleTickerProviderStateMixin {
   final Location _location = Location();
   final AuthService _authService = AuthService();
   final deviceIdService = DeviceIDService();
@@ -41,12 +43,30 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
   final Map<String, String> _markingInitiator = {};
   // Animation controller for the shimmer effect
   late AnimationController _shimmerController;
+  late Animation<double> _fadeAnimation;
   // ---------------------
 
   @override
   void initState() {
     super.initState();
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    );
+    _fadeAnimation = Tween<double>(begin: 0.3, end: 0.9).animate(
+      CurvedAnimation(
+        parent: _shimmerController,
+        curve: Curves.easeInOut, // Smooth transition
+      ),
+    );
+    _shimmerController.repeat(reverse: true);
     _initializeAndFetchData();
+  }
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
   }
 
   // --- Initialization and Data Fetching (Unchanged from previous safe version) ---
@@ -59,7 +79,9 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
     _accessToken = await secureStorage.read(key: 'accessToken');
     // _accessToken = _hardcodedAccessToken; // Using constant for example
     if (_accessToken == null || _accessToken!.isEmpty) {
-      _handleCriticalError("Authentication token missing. Please login again.");
+      _handleCriticalError(
+        "Authentication credentials missing. Please login again.",
+      );
       return;
     }
     await _getAndStoreDeviceId();
@@ -82,6 +104,20 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
   }
 
   Future<void> _fetchTimetableData({bool showLoading = true}) async {
+    final bool connected = await NetwrokUtils.isConnected();
+    if (!mounted) return;
+    if (!connected) {
+      _handleCriticalError(
+        "No internet connection. Please connect and try again.",
+      );
+      if (showLoading && _isLoadingTimetable) {
+        setState(() {
+          _isLoadingTimetable = false;
+        });
+      }
+      return; // Stop execution
+    }
+
     if (showLoading && mounted) {
       setState(() {
         _isLoadingTimetable = true;
@@ -89,7 +125,9 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
       });
     }
     if (_accessToken == null) {
-      if (mounted) _handleFetchError("Access token not available.");
+      if (mounted) {
+        _handleFetchError("Authentication credentials missing unexpectedly");
+      }
       return;
     }
     try {
@@ -111,7 +149,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
       } else if (response.statusCode == 401 || response.statusCode == 403) {
         _handleCriticalError('Authentication failed. Please restart the app.');
       } else {
-        String errorMsg = 'Failed to load timetable (${response.statusCode})';
+        String errorMsg = 'Failed to load timetable.';
         try {
           final decodedError = jsonDecode(response.body);
           if (decodedError['message'] != null) {
@@ -122,7 +160,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
       }
     } catch (e) {
       if (mounted) {
-        _handleFetchError("Could not fetch timetable: ${e.toString()}");
+        _handleFetchError("Could not fetch timetable. Please try again.");
       }
     } finally {
       if (mounted) {
@@ -132,7 +170,6 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
       }
     }
   }
-  // ---------------------------------------
 
   // --- Location Handling (Unchanged) ---
   // --- Updated Location Handling ---
@@ -204,7 +241,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
         await _location.changeSettings(accuracy: LocationAccuracy.high);
         // Attempt to get location with a timeout
         LocationData locationData = await _location.getLocation().timeout(
-          const Duration(seconds: 10),
+          const Duration(seconds: 15),
         );
         if (locationData.isMock == true) {
           // Check if isMock is explicitly true
@@ -221,8 +258,9 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
       } catch (e) {
         // Handle errors during location fetching (e.g., timeout, platform exception)
         if (mounted) {
+          debugPrint('Could not get current location: ${e.toString()}');
           _showSnackbar(
-            'Could not get current location: ${e.toString()}',
+            'Could not get current location. Please try again.',
             isError: true,
           );
         }
@@ -307,20 +345,20 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
         //   "Attendance marking disabled while Developer Options are active.",
         //   isError: true,
         // );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder:
-                (context) => ErrorScreen(
-                  message:
-                      "Attendance marking disabled while Developer Options are active.",
-                  // showRetryButton: false,
-                ),
-          ),
+        _handleCriticalError(
+          "Attendance marking disabled while Developer Options are active.",
         );
       }
       // _resetMarkingState(lectureSlug); // Reset UI if needed
       return; // Stop the marking process
+    }
+
+    final bool connected = await NetwrokUtils.isConnected();
+    if (!connected) {
+      _handleCriticalError(
+        "No internet connection. Please connect and try again.",
+      );
+      return; // Stop execution
     }
 
     setState(() {
@@ -409,9 +447,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
           if (newAccessToken != null && newAccessToken.isNotEmpty) {
             // Retry the original request with the new token
             final retryResponse = await http.post(
-              Uri.parse(
-                '$backendBaseUrl/api/manage/session/mark_attendance_for_student/',
-              ),
+              Uri.parse(url),
               headers: {
                 'Authorization': 'Bearer $newAccessToken', // Use NEW token
                 'Content-Type': 'application/json',
@@ -422,13 +458,16 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
             // Handle the retryResponse (check status code 200, etc.)
             if (retryResponse.statusCode == 200) {
               // Process successful retry...
-              _showSnackbar('Attendance marked successfully!', isError: false);
+              _showSnackbar(
+                reason == null
+                    ? 'Attendance marked!'
+                    : 'Manual request submitted!',
+                isError: false,
+              );
               await _fetchTimetableData(showLoading: false); // Refresh UI
             } else {
               // Retry also failed
-              throw Exception(
-                'Failed to mark attendance after refresh (${retryResponse.statusCode})',
-              );
+              throw Exception('Failed to mark attendance after refresh.');
             }
           } else {
             // Should not happen if refreshSuccess is true, but handle defensively
@@ -457,7 +496,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
         throw Exception('$errorMessage (${response.statusCode})');
       }
     } catch (e) {
-      _showSnackbar('Error: ${e.toString()}', isError: true);
+      debugPrint('Error: ${e.toString()}');
+      _showSnackbar('Something went wrong. Please try again.', isError: true);
     } finally {
       _resetMarkingState(lectureSlug);
     }
@@ -493,22 +533,6 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
       debugPrint("Error extracting subject name: $e. Lecture object: $lecture");
       // Keep default subjectName
     }
-
-    // --- DEBUGGING STEP (Optional): Replace with a simple dialog first ---
-    // showDialog(
-    //   context: context,
-    //   builder: (context) => AlertDialog(
-    //     title: Text("Debug Dialog"),
-    //     content: Text("Lecture Slug: ${lecture['slug']}\nSubject: $subjectName"),
-    //     actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text("Close"))],
-    //   )
-    // );
-    // If the above debug dialog shows without crashing, the issue is likely INSIDE ManualMarkingDialog.
-    // If the debug dialog *still* crashes, the issue is likely with the context or the lecture object itself.
-    // --- END DEBUGGING STEP ---
-
-    // --- Original Dialog Call (assuming ManualMarkingDialog is safe) ---
-    // Ensure ManualMarkingDialog widget exists and is correctly imported.
     showDialog(
       context: context,
       barrierDismissible: false, // Good practice while submitting
@@ -592,26 +616,23 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'SMARTROLL',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.2,
-          ),
-        ),
-        leading: IconButton(
-          tooltip: "Refresh Schedule", // Add tooltip for accessibility
-          icon: const Icon(Icons.refresh),
-          // Use the same onPressed logic as before
-          onPressed:
-              _isLoadingTimetable || _isMarkingLecture.containsValue(true)
-                  ? null
-                  : () => _fetchTimetableData(showLoading: true),
-        ),
-        actions: [
-          IconButton(icon: const Icon(Icons.logout), onPressed: _handleLogout),
-        ],
+        title: SizedBox(
+          // height: kToolbarHeight - 2,
+          width: MediaQuery.of(context).size.width * 0.5, //100
+          child: Image.asset('assets/LOGO.webp', fit: BoxFit.contain),
+        ), // Use the logo image
+        // leading: IconButton(
+        //   tooltip: "Refresh Schedule", // Add tooltip for accessibility
+        //   icon: const Icon(Icons.refresh),
+        //   // Use the same onPressed logic as before
+        //   onPressed:
+        //       _isLoadingTimetable || _isMarkingLecture.containsValue(true)
+        //           ? null
+        //           : () => _fetchTimetableData(showLoading: true),
+        // ),
+        // actions: [
+        //   IconButton(icon: const Icon(Icons.logout), onPressed: _handleLogout),
+        // ],
       ),
       body: _buildBodyWithDividers(), // Call the new body builder
     );
@@ -1041,8 +1062,6 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
         ],
       );
     } else {
-      // Show nothing if status is null or unexpected
-      // Add padding to maintain card height consistency if needed
       // return const SizedBox(height: 10); // Approx height of buttons row
       return const SizedBox.shrink(); // Or truly nothing
     }
@@ -1131,7 +1150,10 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
             Text(
               _fetchErrorMessage ?? "An error occurred",
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, color: Colors.white70),
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: Colors.grey[400], // Lighter grey for message body
+                height: 1.4, // Improve line spacing for readability
+              ),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -1139,9 +1161,16 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
               style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,
                   vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(
+                    10,
+                  ), // Consistent rounding
                 ),
               ),
             ),
@@ -1152,168 +1181,90 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
   }
 
   // --- Helper: Loading State Widget ---
+  // --- Helper: Loading State Widget (Simplified) ---
   Widget _buildLoadingShimmer() {
+    // Use ListView.builder for efficiency if list can be long,
+    // or Column + List.generate if always short. ListView is fine.
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      itemCount: 2, // Show 2 skeleton groups
-      itemBuilder: (context, groupIndex) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Branch name shimmer
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              child: Row(
-                children: [
-                  Container(
-                    width: 4,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: Colors.blueAccent,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  AnimatedBuilder(
-                    animation: _shimmerController,
-                    builder: (context, child) {
-                      return Container(
-                        width: 200,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.grey[800]!,
-                              Colors.grey[600]!,
-                              Colors.grey[800]!,
-                            ],
-                            stops: [0.0, _shimmerController.value, 1.0],
-                          ),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-            // Lecture card shimmers
-            ...List.generate(3, (index) => _buildShimmerCard()),
-            const SizedBox(height: 16),
-          ],
-        );
+      padding: const EdgeInsets.symmetric(vertical: 10), // Reduced padding
+      itemCount: 3, // Show 3 skeleton items (adjust as needed)
+      itemBuilder: (context, index) {
+        // Directly build the shimmer card, no separate group needed for this simple version
+        return _buildShimmerCard();
       },
     );
   }
 
+  // --- Helper: Shimmer Card Widget (Simplified) ---
   Widget _buildShimmerCard() {
+    // Define placeholder color
+    final Color placeholderColor = Colors.white.withOpacity(
+      0.08,
+    ); // Subtle grey for dark theme
+    final BorderRadius borderRadius = BorderRadius.circular(4);
+
     return Padding(
+      // Use the same padding as real cards for consistency
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Card(
-        elevation: 4,
+        // Use card theme or define style matching real cards
+        elevation: 0, // Flatter look for skeleton
+        color: Colors.white.withOpacity(0.04), // Slightly different background
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.grey[850]!, width: 1),
+          // Optional: remove border or make it subtler for skeleton
+          // side: BorderSide(color: Colors.grey[850]!, width: 1),
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AnimatedBuilder(
-                          animation: _shimmerController,
-                          builder: (context, child) {
-                            return Container(
-                              width: double.infinity,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.grey[800]!,
-                                    Colors.grey[600]!,
-                                    Colors.grey[800]!,
-                                  ],
-                                  stops: [0.0, _shimmerController.value, 1.0],
-                                ),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 8),
-                        AnimatedBuilder(
-                          animation: _shimmerController,
-                          builder: (context, child) {
-                            return Container(
-                              width: 120,
-                              height: 16,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.grey[800]!,
-                                    Colors.grey[600]!,
-                                    Colors.grey[800]!,
-                                  ],
-                                  stops: [0.0, _shimmerController.value, 1.0],
-                                ),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              ...List.generate(
-                3,
-                (index) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      Icon(
-                        index == 0
-                            ? Icons.access_time
-                            : index == 1
-                            ? Icons.person_outline
-                            : Icons.location_on_outlined,
-                        size: 16,
-                        color: Colors.grey[400],
-                      ),
-                      const SizedBox(width: 8),
-                      AnimatedBuilder(
-                        animation: _shimmerController,
-                        builder: (context, child) {
-                          return Container(
-                            width: 150,
-                            height: 16,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.grey[800]!,
-                                  Colors.grey[600]!,
-                                  Colors.grey[800]!,
-                                ],
-                                stops: [0.0, _shimmerController.value, 1.0],
-                              ),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
+              // Shimmer for Subject Name (Full Width)
+              FadeTransition(
+                opacity: _fadeAnimation,
+                child: Container(
+                  height: 20, // Adjust height
+                  width: double.infinity, // Take full width
+                  decoration: BoxDecoration(
+                    color: placeholderColor,
+                    borderRadius: borderRadius,
                   ),
                 ),
               ),
+              const SizedBox(height: 8),
+
+              // Shimmer for Subject Code (Shorter Width)
+              FadeTransition(
+                opacity: _fadeAnimation,
+                child: Container(
+                  height: 14, // Adjust height
+                  width: 100, // Fixed shorter width
+                  decoration: BoxDecoration(
+                    color: placeholderColor,
+                    borderRadius: borderRadius,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18), // More space before details
+              // Shimmer for Detail Lines (Time, Teacher, Location)
+              // Combine into one loop for simplicity
+              for (int i = 0; i < 3; i++) ...[
+                FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: Container(
+                    height: 14, // Adjust height
+                    // Vary widths slightly for realism
+                    width: i == 0 ? 150 : (i == 1 ? 180 : 130),
+                    decoration: BoxDecoration(
+                      color: placeholderColor,
+                      borderRadius: borderRadius,
+                    ),
+                  ),
+                ),
+                // Add space only between lines
+                if (i < 2) const SizedBox(height: 10),
+              ],
             ],
           ),
         ),
@@ -1343,6 +1294,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen> {
             icon: const Icon(Icons.refresh),
             label: const Text('Check Again'),
             style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),
           ),

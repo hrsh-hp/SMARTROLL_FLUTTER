@@ -5,7 +5,7 @@
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>
-		<string>Smartroll</string>
+		<string>SmartRoll</string>
 		<key>CFBundleExecutable</key>
 		<string>$(EXECUTABLE_NAME)</string>
 		<key>CFBundleIdentifier</key>
@@ -56,6 +56,9 @@
 		<array>
 			<string>location</string>
 		</array>
+		<!-- Add Microphone Usage Description -->
+		<key>NSMicrophoneUsageDescription</key>
+		<string>This app needs access to the microphone for attendance marking for verification.</string>
 
 		<!-- Deep Linking (if app handles login redirect) -->
 		<key>CFBundleURLTypes</key>
@@ -65,7 +68,7 @@
 				<string>Editor</string>
 				<key>CFBundleURLName</key>
 				<!-- Optional: Use your bundle ID or a descriptive name -->
-				<string>com.yourcompany.smartroll</string>
+				<string>com.live.smartroll</string>
 				<key>CFBundleURLSchemes</key>
 				<array>
 					<!-- Your custom scheme -->
