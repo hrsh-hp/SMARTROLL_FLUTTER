@@ -1,5 +1,6 @@
 import 'package:app_settings/app_settings.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -8,6 +9,7 @@ import 'package:location/location.dart';
 import 'package:smartroll/Screens/login_screen.dart';
 import 'package:smartroll/Screens/manual_marking_dialouge.dart'; // Ensure this path is correct
 import 'package:smartroll/utils/Constants.dart';
+import 'package:smartroll/utils/attendace_data_collector.dart';
 import 'package:smartroll/utils/auth_service.dart';
 import 'package:smartroll/utils/device_id_service.dart';
 import 'splash_screen.dart'; // Ensure this path is correct
@@ -26,13 +28,14 @@ class AttendanceMarkingScreen extends StatefulWidget {
 
 class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
     with SingleTickerProviderStateMixin {
-  final Location _location = Location();
   final AuthService _authService = AuthService();
   final deviceIdService = DeviceIDService();
   final SecurityService _securityService = SecurityService();
+  final AttendanceDataCollector _dataCollector = AttendanceDataCollector();
 
   // --- State Variables (Original Names) ---
   bool _isLoadingTimetable = true;
+  bool _isCollectingAndMarking = false;
   String? _fetchErrorMessage;
   List<dynamic> _timetableData = [];
   String? _deviceId;
@@ -324,6 +327,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
 
   // --- Attendance Marking Logic (Unchanged from previous safe version) ---
   Future<void> _handleMarkAttendance(dynamic lecture, {String? reason}) async {
+    if (_isCollectingAndMarking) return;
+
     final String lectureSlug = lecture['slug'];
     if (_isMarkingLecture[lectureSlug] == true) return;
 
@@ -366,18 +371,81 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       _markingInitiator[lectureSlug] = initiator;
     });
 
-    LocationData? locationData;
-    if (reason == null) {
-      locationData = await _getCurrentLocation();
-      if (!mounted) {
-        _resetMarkingState(lectureSlug);
-        return;
+    // LocationData? locationData;
+    setState(() {
+      _isCollectingAndMarking = true;
+    });
+    // --- 1. Collect Location and Audio Data ---
+    _showSnackbar(
+      "Collecting location and audio...",
+      isError: false,
+      duration: const Duration(seconds: 12),
+    );
+    final AttendanceDataResult dataResult = await _dataCollector.collectData(
+      recordingDuration: const Duration(seconds: 10),
+    );
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    if (!mounted) return;
+
+    if (dataResult.status != AttendanceDataStatus.success) {
+      // Default error message
+      String errorMsg =
+          dataResult.errorMessage ?? 'Failed to collect necessary data.';
+
+      // Map status to user-friendly messages (including the new mock status)
+      switch (dataResult.status) {
+        case AttendanceDataStatus.locationPermissionDenied:
+          errorMsg = 'Location permission is required.';
+          break;
+        case AttendanceDataStatus.locationPermissionDeniedForever:
+          errorMsg =
+              'Location permission permanently denied. Please enable in settings.';
+          break;
+        case AttendanceDataStatus.locationServiceDisabled:
+          errorMsg = 'Location services are disabled.';
+          break;
+        case AttendanceDataStatus.locationTimeout:
+          errorMsg = 'Could not get location in time.';
+          break;
+        case AttendanceDataStatus.locationIsMocked:
+          errorMsg = 'Mock locations are not allowed for attendance marking.';
+          break; // <-- Specific message
+        case AttendanceDataStatus.microphonePermissionDenied:
+          errorMsg = 'Microphone permission is required.';
+          break;
+        case AttendanceDataStatus.microphonePermissionDeniedForever:
+          errorMsg =
+              'Microphone permission permanently denied. Please enable in settings.';
+          break;
+        case AttendanceDataStatus.recordingError:
+          errorMsg = 'Failed to record audio.';
+          break;
+        case AttendanceDataStatus.locationError:
+          errorMsg = 'Could not determine location.';
+          break; // Generic location error
+        case AttendanceDataStatus
+            .unknownError: // Keep default or make more specific if possible
+        default:
+          break;
       }
-      if (locationData == null) {
-        _resetMarkingState(lectureSlug);
-        return;
-      }
+
+      _showSnackbar(errorMsg, isError: true);
+      setState(() {
+        _isCollectingAndMarking = false;
+      }); // Reset loading state
+      return; // Stop the process
     }
+    if (dataResult.locationData == null || dataResult.audioBytes == null) {
+      _showSnackbar('Collected data is incomplete.', isError: true);
+      setState(() {
+        _isCollectingAndMarking = false;
+      });
+      return;
+    }
+    // --- Data collected successfully ---
+    final LocationData locationData = dataResult.locationData!;
+    final Uint8List audioBytes = dataResult.audioBytes!;
 
     if (_accessToken == null) {
       _showSnackbar("Authentication error.", isError: true);
@@ -385,7 +453,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       return;
     }
     if (_deviceId == null) {
-      _showSnackbar("Device ID error. Retrying...", isError: true);
+      _showSnackbar("Device Identification error. Retrying...", isError: true);
       await _getAndStoreDeviceId();
       if (!mounted) {
         _resetMarkingState(lectureSlug);
