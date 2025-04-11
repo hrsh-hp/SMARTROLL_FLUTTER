@@ -72,6 +72,14 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
     super.dispose();
   }
 
+  Future<void> _loadAccessToken() async {
+    // Use actual storage read
+    _accessToken = await secureStorage.read(key: 'accessToken');
+    // Or use test token temporarily
+    // _accessToken = _testAccessToken;
+    debugPrint("Access token loaded: ${_accessToken != null}");
+  }
+
   // --- Initialization and Data Fetching (Unchanged from previous safe version) ---
   Future<void> _initializeAndFetchData() async {
     if (!mounted) return;
@@ -79,7 +87,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       _isLoadingTimetable = true;
       _fetchErrorMessage = null;
     });
-    _accessToken = await secureStorage.read(key: 'accessToken');
+    await _loadAccessToken();
     // _accessToken = _hardcodedAccessToken; // Using constant for example
     if (_accessToken == null || _accessToken!.isEmpty) {
       _handleCriticalError(
@@ -174,114 +182,6 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
     }
   }
 
-  // --- Location Handling (Unchanged) ---
-  // --- Updated Location Handling ---
-  Future<LocationData?> _getCurrentLocation() async {
-    // 1. Check Location Service (GPS) Status
-    bool serviceEnabled = await _location.serviceEnabled();
-    if (!serviceEnabled) {
-      // Request user to enable location services
-      serviceEnabled = await _location.requestService();
-      if (!serviceEnabled) {
-        // Service still not enabled, inform user and stop
-        if (mounted) {
-          _showSnackbar(
-            'Please enable GPS/Location Services to mark attendance.',
-            isError: true,
-          );
-        }
-        return null;
-      }
-    }
-
-    // 2. Check Location Permission Status
-    PermissionStatus permission = await _location.hasPermission();
-
-    if (permission == PermissionStatus.deniedForever) {
-      // Permission permanently denied, guide user to settings
-      if (mounted) {
-        _showPermissionDialog(
-          "Location Permission Required",
-          "Location permission was permanently denied. To mark attendance, please enable it for SmartRoll in your phone's settings.",
-          AppSettingsType.location, // Tries to open location settings directly
-        );
-      }
-      return null; // Stop the process
-    }
-
-    if (permission == PermissionStatus.denied) {
-      // Permission denied, request it once
-      permission = await _location.requestPermission();
-
-      if (permission == PermissionStatus.denied) {
-        // User denied the permission again
-        if (mounted) {
-          _showPermissionDialog(
-            "Location Permission Required",
-            "SmartRoll needs location access to verify attendance. Please grant permission in the app settings.",
-            AppSettingsType.settings, // Open general app settings as fallback
-          );
-        }
-        return null; // Stop the process
-      } else if (permission == PermissionStatus.deniedForever) {
-        // User denied permanently after the request
-        if (mounted) {
-          _showPermissionDialog(
-            "Location Permission Required",
-            "Location permission was permanently denied. Please enable it for SmartRoll in your phone's settings.",
-            AppSettingsType.location,
-          );
-        }
-        return null; // Stop the process
-      }
-      // If permission is now granted, proceed (falls through to the next check)
-    }
-
-    // 3. If permission is granted (either initially or after request)
-    if (permission == PermissionStatus.granted) {
-      try {
-        // Set desired accuracy (consider 'balanced' for potentially faster indoor results)
-        await _location.changeSettings(accuracy: LocationAccuracy.high);
-        // Attempt to get location with a timeout
-        LocationData locationData = await _location.getLocation().timeout(
-          const Duration(seconds: 15),
-        );
-        if (locationData.isMock == true) {
-          // Check if isMock is explicitly true
-          debugPrint("Mock location detected!");
-          if (mounted) {
-            _showSnackbar(
-              "Mock location detected. Attendance marking disabled.",
-              isError: true,
-            );
-          }
-          return null; // Return null to prevent marking
-        }
-        return locationData;
-      } catch (e) {
-        // Handle errors during location fetching (e.g., timeout, platform exception)
-        if (mounted) {
-          debugPrint('Could not get current location: ${e.toString()}');
-          _showSnackbar(
-            'Could not get current location. Please try again.',
-            isError: true,
-          );
-        }
-        return null;
-      }
-    } else {
-      // Fallback case if permission status is somehow not granted after checks
-      // (should ideally be caught by earlier checks)
-      if (mounted) {
-        _showSnackbar(
-          'Location permission is required but was not granted.',
-          isError: true,
-        );
-      }
-      return null;
-    }
-  }
-
   // --- Helper Function for Permission Dialog ---
   void _showPermissionDialog(
     String title,
@@ -327,14 +227,13 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
 
   // --- Attendance Marking Logic (Unchanged from previous safe version) ---
   Future<void> _handleMarkAttendance(dynamic lecture, {String? reason}) async {
-    if (_isCollectingAndMarking) return;
-
     final String lectureSlug = lecture['slug'];
     if (_isMarkingLecture[lectureSlug] == true) return;
 
     final String initiator = reason == null ? 'auto' : 'manual';
     if (!mounted) return;
 
+    // 1. Developer Mode Check (at time of marking)
     bool devModeEnabledNow = false;
     try {
       // Assuming you have access to SecurityService instance (_securityService)
@@ -358,6 +257,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       return; // Stop the marking process
     }
 
+    // 2. Connectivity Check
     final bool connected = await NetwrokUtils.isConnected();
     if (!connected) {
       _handleCriticalError(
@@ -366,87 +266,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       return; // Stop execution
     }
 
-    setState(() {
-      _isMarkingLecture[lectureSlug] = true;
-      _markingInitiator[lectureSlug] = initiator;
-    });
-
-    // LocationData? locationData;
-    setState(() {
-      _isCollectingAndMarking = true;
-    });
-    // --- 1. Collect Location and Audio Data ---
-    _showSnackbar(
-      "Collecting location and audio...",
-      isError: false,
-      duration: const Duration(seconds: 12),
-    );
-    final AttendanceDataResult dataResult = await _dataCollector.collectData(
-      recordingDuration: const Duration(seconds: 10),
-    );
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-    if (!mounted) return;
-
-    if (dataResult.status != AttendanceDataStatus.success) {
-      // Default error message
-      String errorMsg =
-          dataResult.errorMessage ?? 'Failed to collect necessary data.';
-
-      // Map status to user-friendly messages (including the new mock status)
-      switch (dataResult.status) {
-        case AttendanceDataStatus.locationPermissionDenied:
-          errorMsg = 'Location permission is required.';
-          break;
-        case AttendanceDataStatus.locationPermissionDeniedForever:
-          errorMsg =
-              'Location permission permanently denied. Please enable in settings.';
-          break;
-        case AttendanceDataStatus.locationServiceDisabled:
-          errorMsg = 'Location services are disabled.';
-          break;
-        case AttendanceDataStatus.locationTimeout:
-          errorMsg = 'Could not get location in time.';
-          break;
-        case AttendanceDataStatus.locationIsMocked:
-          errorMsg = 'Mock locations are not allowed for attendance marking.';
-          break; // <-- Specific message
-        case AttendanceDataStatus.microphonePermissionDenied:
-          errorMsg = 'Microphone permission is required.';
-          break;
-        case AttendanceDataStatus.microphonePermissionDeniedForever:
-          errorMsg =
-              'Microphone permission permanently denied. Please enable in settings.';
-          break;
-        case AttendanceDataStatus.recordingError:
-          errorMsg = 'Failed to record audio.';
-          break;
-        case AttendanceDataStatus.locationError:
-          errorMsg = 'Could not determine location.';
-          break; // Generic location error
-        case AttendanceDataStatus
-            .unknownError: // Keep default or make more specific if possible
-        default:
-          break;
-      }
-
-      _showSnackbar(errorMsg, isError: true);
-      setState(() {
-        _isCollectingAndMarking = false;
-      }); // Reset loading state
-      return; // Stop the process
-    }
-    if (dataResult.locationData == null || dataResult.audioBytes == null) {
-      _showSnackbar('Collected data is incomplete.', isError: true);
-      setState(() {
-        _isCollectingAndMarking = false;
-      });
-      return;
-    }
-    // --- Data collected successfully ---
-    final LocationData locationData = dataResult.locationData!;
-    final Uint8List audioBytes = dataResult.audioBytes!;
-
+    // 3. Token & Device ID Check
     if (_accessToken == null) {
       _showSnackbar("Authentication error.", isError: true);
       _resetMarkingState(lectureSlug);
@@ -466,107 +286,303 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       }
     }
 
+    setState(() {
+      _isMarkingLecture[lectureSlug] = true;
+      _markingInitiator[lectureSlug] = initiator;
+    });
+
+    AttendanceDataResult? dataResult;
+    if (initiator == 'auto') {
+      _showSnackbar(
+        "Collecting location and audio...",
+        isError: false,
+        duration: const Duration(seconds: 12),
+      );
+      dataResult = await _dataCollector.collectData(
+        recordingDuration: const Duration(seconds: 10),
+      );
+      ScaffoldMessenger.of(
+        context,
+      ).hideCurrentSnackBar(); // Hide collecting message
+
+      if (!mounted) {
+        _resetMarkingState(lectureSlug);
+        return;
+      }
+
+      // Handle data collection failure
+      if (dataResult.status != AttendanceDataStatus.success) {
+        String errorMsg =
+            dataResult.errorMessage ?? 'Failed to collect necessary data.';
+        // Map status to user-friendly messages
+        switch (dataResult.status) {
+          case AttendanceDataStatus.locationPermissionDenied:
+            errorMsg = 'Location permission is required.';
+            break;
+          case AttendanceDataStatus.locationPermissionDeniedForever:
+            errorMsg =
+                'Location permission permanently denied. Please enable in settings.';
+            break;
+          case AttendanceDataStatus.locationServiceDisabled:
+            errorMsg = 'Location services are disabled.';
+            break;
+          case AttendanceDataStatus.locationTimeout:
+            errorMsg = 'Could not get location/audio in time.';
+            break;
+          case AttendanceDataStatus.locationIsMocked:
+            errorMsg = 'Mock locations are not allowed.';
+            break;
+          case AttendanceDataStatus.microphonePermissionDenied:
+            errorMsg = 'Microphone permission is required.';
+            break;
+          case AttendanceDataStatus.microphonePermissionDeniedForever:
+            errorMsg =
+                'Microphone permission permanently denied. Please enable in settings.';
+            break;
+          case AttendanceDataStatus.recordingError:
+            errorMsg = 'Failed to record audio.';
+            break;
+          case AttendanceDataStatus.locationError:
+            errorMsg = 'Could not determine location.';
+            break;
+          default:
+            break;
+        }
+        _showSnackbar(errorMsg, isError: true);
+        _resetMarkingState(lectureSlug); // Reset state for this lecture
+        return; // Stop the process
+      }
+      // Check null safety again
+      if (dataResult.locationData == null || dataResult.audioBytes == null) {
+        _showSnackbar('Collected data is incomplete.', isError: true);
+        _resetMarkingState(lectureSlug);
+        return;
+      }
+    }
+    _showSnackbar(
+      initiator == 'auto' ? "Marking attendance..." : "Submitting request...",
+      isError: false,
+    );
+    String encodedDeviceId;
+    try {
+      encodedDeviceId = base64Encode(utf8.encode(_deviceId!));
+    } catch (e) {
+      _showSnackbar('Failed to prepare device identifier.', isError: true);
+      _resetMarkingState(lectureSlug);
+      return;
+    }
     try {
       final String url =
-          reason != null
-              ? '$_backendBaseUrl/api/manage/session/mark_for_regulization/'
-              : '$_backendBaseUrl/api/manage/session/mark_attendance_for_student/';
-      final Map<String, dynamic> requestBody = {
-        'lecture_slug': lectureSlug,
-        'device_id': base64Encode(utf8.encode(_deviceId!)),
-        if (reason != null) 'regulization_commet': reason,
-        if (reason == null && locationData != null) ...{
-          'latitude': locationData.latitude,
-          'longitude': locationData.longitude,
-        },
-      };
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {
-          'Authorization': 'Bearer $_accessToken',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(requestBody),
+          initiator == 'auto'
+              ? '$backendBaseUrl/api/manage/session/mark_attendance_for_student/'
+              : '$backendBaseUrl/api/manage/session/mark_for_regulization/';
+      await _makeApiRequestWithRetry(
+        lectureSlug: lectureSlug,
+        initiator: initiator,
+        url: url,
+        accessToken: _accessToken!,
+        deviceIdEncoded: encodedDeviceId,
+        locationData: dataResult?.locationData, // Null for manual
+        audioBytes: dataResult?.audioBytes, // Null for manual
+        reason: reason, // Null for auto
       );
+      if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      // Reset state is handled within _makeApiRequestWithRetry's finally block
+    } catch (e) {
+      debugPrint('Error: ${e.toString()}');
+      _showSnackbar('Something went wrong. Please try again.', isError: true);
+    } finally {
+      _resetMarkingState(lectureSlug);
+    }
+  }
+
+  // --- Helper Function for API Request with Retry Logic ---
+  Future<void> _makeApiRequestWithRetry({
+    required String lectureSlug,
+    required String initiator,
+    required String url,
+    required String accessToken,
+    required String deviceIdEncoded,
+    LocationData? locationData, // Nullable
+    Uint8List? audioBytes, // Nullable
+    String? reason, // Nullable
+  }) async {
+    http.BaseRequest request;
+    bool isMultipart = initiator == 'auto';
+
+    // --- Function to build the request (used for initial and retry) ---
+    http.BaseRequest buildRequest(String currentToken) {
+      if (isMultipart) {
+        final multipartRequest = http.MultipartRequest('POST', Uri.parse(url));
+        multipartRequest.headers['Authorization'] = 'Bearer $currentToken';
+        multipartRequest.fields['device_id'] = deviceIdEncoded;
+        multipartRequest.fields['latitude'] = locationData!.latitude.toString();
+        // Assumes locationData is non-null if multipart
+        multipartRequest.fields['longitude'] =
+            locationData.longitude.toString();
+        if (lectureSlug != null)
+          multipartRequest.fields['lecture_slug'] = lectureSlug;
+        // Add audio file
+        multipartRequest.files.add(
+          http.MultipartFile.fromBytes(
+            'audio', // Backend field name for the file
+            audioBytes!, // Assumes audioBytes is non-null if multipart
+            filename: 'attendance_audio.wav',
+          ),
+        );
+        return multipartRequest;
+      } else {
+        // Standard JSON POST for manual request
+        final jsonRequest = http.Request('POST', Uri.parse(url));
+        jsonRequest.headers['Authorization'] = 'Bearer $currentToken';
+        jsonRequest.headers['Content-Type'] = 'application/json';
+        final Map<String, dynamic> requestBody = {
+          'lecture_slug': lectureSlug,
+          'device_id': deviceIdEncoded,
+          if (reason != null) 'regulization_commet': reason,
+        };
+        jsonRequest.body = jsonEncode(requestBody);
+        return jsonRequest;
+      }
+    }
+    // --- End buildRequest function ---
+
+    try {
+      request = buildRequest(accessToken); // Build initial request
+
+      // --- Send Request (Initial Attempt) ---
+      final http.StreamedResponse streamedResponse = await (request
+                  is http.MultipartRequest
+              ? request.send()
+              : http.Client().send(
+                request,
+              ) // Need Client().send for http.Request
+              )
+          .timeout(const Duration(seconds: 30));
+
       if (!mounted) return;
-      final responseData = jsonDecode(response.body);
-      if (response.statusCode == 200) {
+
+      final int statusCode = streamedResponse.statusCode;
+      final String responseBody = await streamedResponse.stream.bytesToString();
+
+      debugPrint("API Response Status: $statusCode");
+      debugPrint("API Response Body: $responseBody");
+
+      // --- Handle Response ---
+      if (statusCode == 200 || statusCode == 201) {
+        // Success
+        final responseData = jsonDecode(responseBody);
         if (responseData['data'] == true && responseData['code'] == 100) {
           _showSnackbar(
-            reason == null ? 'Attendance marked!' : 'Manual request submitted!',
+            initiator == 'auto'
+                ? 'Attendance marked!'
+                : 'Manual request submitted!',
             isError: false,
           );
           await _fetchTimetableData(showLoading: false); // Refresh silently
         } else {
           throw Exception(
             responseData['message'] ??
-                (reason == null ? 'Failed to mark' : 'Failed to submit'),
+                (initiator == 'auto' ? 'Failed to mark' : 'Failed to submit'),
           );
         }
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
+      } else if (statusCode == 401 || statusCode == 403) {
+        // --- Handle Auth Error & Retry ---
         debugPrint("Received 401/403. Attempting token refresh...");
-        // Attempt refresh using the service
-        final refreshSuccess = await _authService.attemptTokenRefresh();
+        final refreshResult = await _authService.attemptTokenRefresh();
 
-        if (refreshSuccess == RefreshStatus.success) {
+        if (refreshResult == RefreshStatus.success) {
           debugPrint("Refresh successful. Retrying original request...");
-          // Get the NEW access token
-          String? newAccessToken = await secureStorage.read(key: 'accessToken');
-          if (newAccessToken != null && newAccessToken.isNotEmpty) {
-            // Retry the original request with the new token
-            final retryResponse = await http.post(
-              Uri.parse(url),
-              headers: {
-                'Authorization': 'Bearer $newAccessToken', // Use NEW token
-                'Content-Type': 'application/json',
-              },
-              body: jsonEncode(requestBody),
-            );
-
-            // Handle the retryResponse (check status code 200, etc.)
-            if (retryResponse.statusCode == 200) {
-              // Process successful retry...
-              _showSnackbar(
-                reason == null
-                    ? 'Attendance marked!'
-                    : 'Manual request submitted!',
-                isError: false,
-              );
-              await _fetchTimetableData(showLoading: false); // Refresh UI
-            } else {
-              // Retry also failed
-              throw Exception('Failed to mark attendance after refresh.');
-            }
-          } else {
-            // Should not happen if refreshSuccess is true, but handle defensively
+          await _loadAccessToken(); // Reload the new token into _accessToken
+          if (_accessToken == null || _accessToken!.isEmpty) {
             throw Exception(
               'Refresh reported success but new token is missing.',
             );
           }
+
+          // Build retry request with NEW token
+          final retryRequest = buildRequest(_accessToken!);
+
+          // Send Retry Request
+          final http.StreamedResponse retryStreamedResponse =
+              await (retryRequest is http.MultipartRequest
+                      ? retryRequest.send()
+                      : http.Client().send(retryRequest))
+                  .timeout(const Duration(seconds: 30));
+
+          if (!mounted) return;
+
+          final int retryStatusCode = retryStreamedResponse.statusCode;
+          final String retryResponseBody =
+              await retryStreamedResponse.stream.bytesToString();
+
+          debugPrint("API Retry Response Status: $retryStatusCode");
+          debugPrint("API Retry Response Body: $retryResponseBody");
+
+          // Handle Retry Response
+          if (retryStatusCode == 200 || retryStatusCode == 201) {
+            final retryResponseData = jsonDecode(retryResponseBody);
+            if (retryResponseData['data'] == true &&
+                retryResponseData['code'] == 100) {
+              _showSnackbar(
+                initiator == 'auto'
+                    ? 'Attendance marked!'
+                    : 'Manual request submitted!',
+                isError: false,
+              );
+              await _fetchTimetableData(showLoading: false);
+            } else {
+              throw Exception(
+                retryResponseData['message'] ?? 'Failed after refresh',
+              );
+            }
+          } else {
+            // Retry also failed
+            throw Exception(
+              'Failed to mark attendance after refresh (Status: $retryStatusCode).',
+            );
+          }
         } else {
-          // Refresh failed, logout and navigate
+          // Refresh failed, logout
           debugPrint("Refresh failed. Logging out.");
-          await _authService.clearTokens(); // Clear tokens
+          await _authService.clearTokens();
           if (mounted) {
-            // Ensure widget is still mounted before navigating
             Navigator.pushAndRemoveUntil(
               context,
-              MaterialPageRoute(builder: (context) => LoginScreen()),
+              MaterialPageRoute(
+                builder:
+                    (context) => LoginScreen(
+                      initialMessage: 'Session expired. Please log in again.',
+                    ),
+              ), // Pass message
               (route) => false,
             );
-            // Show a message *after* navigation or on LoginScreen
-            // _showSnackbar('Session expired. Please log in again.', isError: true);
           }
-          return; // Stop further processing in this function
+          // No need to throw exception here, navigation handles it
         }
       } else {
-        String errorMessage = responseData['message'] ?? 'Server error';
-        throw Exception('$errorMessage (${response.statusCode})');
+        // Other non-200, non-401/403 errors
+        String errorMessage = 'Server error';
+        try {
+          final responseData = jsonDecode(responseBody);
+          errorMessage = "${responseData['message']}" ?? errorMessage;
+        } catch (_) {
+          /* Ignore if not JSON */
+        }
+        throw Exception('$errorMessage (Status: $statusCode)');
       }
     } catch (e) {
-      debugPrint('Error: ${e.toString()}');
-      _showSnackbar('Something went wrong. Please try again.', isError: true);
+      // Catch all errors from API call, refresh, or retry
+      debugPrint('API Request/Retry Error: ${e.toString()}');
+      _showSnackbar(
+        e is Exception
+            ? e.toString().replaceFirst('Exception: ', '')
+            : 'Something went wrong. Please try again.',
+        isError: true,
+      );
     } finally {
+      // Always reset the marking state for this specific lecture
       _resetMarkingState(lectureSlug);
     }
   }
@@ -652,16 +668,22 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
     }
   }
 
-  void _showSnackbar(String message, {bool isError = true}) {
+  void _showSnackbar(
+    String message, {
+    bool isError = true,
+    Color? backgroundColor,
+    Duration duration = const Duration(seconds: 4),
+  }) {
     if (mounted) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
           backgroundColor:
-              isError ? Colors.red.shade700 : Colors.green.shade700,
+              backgroundColor ??
+              (isError ? Colors.red.shade700 : Colors.green.shade700),
           behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: isError ? 4 : 3),
+          duration: duration,
         ),
       );
     }
@@ -709,9 +731,6 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   // --- Body Builder with Dividers and Styled Header ---
   Widget _buildBodyWithDividers() {
     if (_isLoadingTimetable) {
-      // return const Center(
-      //   // child: CircularProgressIndicator(color: Colors.blueAccent),
-      // );
       return _buildLoadingShimmer();
     }
     if (_fetchErrorMessage != null) {
