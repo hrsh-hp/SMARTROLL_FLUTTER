@@ -1,5 +1,6 @@
+import 'dart:io';
+
 import 'package:app_settings/app_settings.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -8,12 +9,12 @@ import 'package:intl/intl.dart';
 import 'package:location/location.dart';
 import 'package:smartroll/Screens/login_screen.dart';
 import 'package:smartroll/Screens/manual_marking_dialouge.dart'; // Ensure this path is correct
-import 'package:smartroll/utils/Constants.dart';
+import 'package:smartroll/utils/constants.dart';
 import 'package:smartroll/utils/attendace_data_collector.dart';
 import 'package:smartroll/utils/auth_service.dart';
-import 'package:smartroll/utils/device_id_service.dart';
-import 'splash_screen.dart'; // Ensure this path is correct
+import 'package:smartroll/utils/device_id_service.dart'; // Ensure this path is correct
 import 'error_screen.dart'; // Ensure this path is correct
+import 'package:path_provider/path_provider.dart';
 
 // --- Centralized Configuration ---
 const String _backendBaseUrl = backendBaseUrl;
@@ -35,7 +36,6 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
 
   // --- State Variables (Original Names) ---
   bool _isLoadingTimetable = true;
-  bool _isCollectingAndMarking = false;
   String? _fetchErrorMessage;
   List<dynamic> _timetableData = [];
   String? _deviceId;
@@ -72,11 +72,65 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
     super.dispose();
   }
 
+  Future<String?> _saveAudioForDebug(Uint8List audioBytes) async {
+    if (!kDebugMode) {
+      // Only run this function in debug mode
+      return null;
+    }
+
+    Directory? directory;
+    try {
+      // Try getting the public Downloads directory first
+      // Note: Access might be restricted on newer Android versions without specific permissions
+      // or might return an app-specific directory within Downloads.
+      if (Platform.isAndroid) {
+        directory =
+            await getExternalStorageDirectory(); // Gets primary external storage
+        // Try to navigate to a common Downloads path if possible (might fail)
+        String downloadsPath = '${directory?.path}/Downloads';
+        directory = Directory(downloadsPath);
+        // Check if it exists, if not, fall back to the base external path
+        if (!await directory.exists()) {
+          directory = await getExternalStorageDirectory();
+        }
+      } else if (Platform.isIOS) {
+        // On iOS, saving to 'Downloads' isn't standard via path_provider.
+        // Saving to ApplicationDocumentsDirectory is more common and accessible via Files app.
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      if (directory == null) {
+        debugPrint(
+          "Could not determine suitable directory for saving debug audio.",
+        );
+        return null;
+      }
+
+      // Ensure the directory exists (especially the Downloads subdirectory on Android)
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+
+      // Create a unique filename
+      final String timestamp = DateTime.now().millisecondsSinceEpoch as String;
+      final String fileName = 'attendance_audio_$timestamp.wav';
+      final String filePath = '${directory.path}/$fileName';
+
+      // Write the file
+      final File audioFile = File(filePath);
+      await audioFile.writeAsBytes(audioBytes);
+
+      debugPrint("Debug audio saved to: $filePath");
+      return filePath; // Return the path
+    } catch (e) {
+      debugPrint("Error saving debug audio: $e");
+      return null; // Return null on failure
+    }
+  }
+
   Future<void> _loadAccessToken() async {
     // Use actual storage read
     _accessToken = await secureStorage.read(key: 'accessToken');
-    // Or use test token temporarily
-    // _accessToken = _testAccessToken;
     debugPrint("Access token loaded: ${_accessToken != null}");
   }
 
@@ -88,7 +142,6 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       _fetchErrorMessage = null;
     });
     await _loadAccessToken();
-    // _accessToken = _hardcodedAccessToken; // Using constant for example
     if (_accessToken == null || _accessToken!.isEmpty) {
       _handleCriticalError(
         "Authentication credentials missing. Please login again.",
@@ -188,8 +241,6 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
     String content,
     AppSettingsType settingsType,
   ) {
-    // Check mounted again before showing dialog, as context might be invalid
-    // if the user navigated away quickly after the await calls.
     if (!mounted) return;
 
     showDialog(
@@ -197,8 +248,9 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       barrierDismissible: false, // User must interact with the dialog
       builder:
           (BuildContext dialogContext) => AlertDialog(
+            backgroundColor: Colors.grey[900],
             title: Text(title),
-            content: Text(content),
+            content: Text(content, style: TextStyle(color: Colors.grey[300])),
             actions: <Widget>[
               TextButton(
                 child: const Text('Cancel'),
@@ -225,7 +277,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
     );
   }
 
-  // --- Attendance Marking Logic (Unchanged from previous safe version) ---
+  // --- Attendance Marking Logic ---
   Future<void> _handleMarkAttendance(dynamic lecture, {String? reason}) async {
     final String lectureSlug = lecture['slug'];
     if (_isMarkingLecture[lectureSlug] == true) return;
@@ -235,14 +287,17 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
 
     // 1. Developer Mode Check (at time of marking)
     bool devModeEnabledNow = false;
+    bool debuggerAttachedNow = false;
     try {
       // Assuming you have access to SecurityService instance (_securityService)
-      devModeEnabledNow = await _securityService.isDeveloperModeEnabled();
+      final checksresults = await _securityService.runAllChecks();
+      devModeEnabledNow = checksresults['isDeveloperModeEnabled'] ?? false;
+      debuggerAttachedNow = checksresults['isDebuggerAttached'] ?? false;
     } catch (e) {
-      debugPrint("Error re-checking dev mode: $e");
+      debugPrint("Error re-checking dev mode and debugger: $e");
     }
 
-    if (devModeEnabledNow) {
+    if (devModeEnabledNow && !debuggerAttachedNow) {
       debugPrint("Developer mode detected at time of marking. Aborting.");
       if (mounted) {
         // _showSnackbar(
@@ -250,10 +305,10 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         //   isError: true,
         // );
         _handleCriticalError(
-          "Attendance marking disabled while Developer Options are active.",
+          "Attendance marking disabled while ${devModeEnabledNow ? "Developer Options are active." : "Debugger is Attached."}",
         );
       }
-      // _resetMarkingState(lectureSlug); // Reset UI if needed
+      // _resetMarkingState(lectureSlug);
       return; // Stop the marking process
     }
 
@@ -286,6 +341,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       }
     }
 
+    //4. collecting loaction and audio
     setState(() {
       _isMarkingLecture[lectureSlug] = true;
       _markingInitiator[lectureSlug] = initiator;
@@ -293,14 +349,15 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
 
     AttendanceDataResult? dataResult;
     if (initiator == 'auto') {
-      _showSnackbar(
-        "Collecting location and audio...",
-        isError: false,
-        duration: const Duration(seconds: 12),
-      );
       dataResult = await _dataCollector.collectData(
         recordingDuration: const Duration(seconds: 10),
       );
+      _showSnackbar(
+        "Collecting surrounding data please do not close the app...",
+        isError: false,
+        duration: const Duration(seconds: 12),
+      );
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).hideCurrentSnackBar(); // Hide collecting message
@@ -314,17 +371,43 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       if (dataResult.status != AttendanceDataStatus.success) {
         String errorMsg =
             dataResult.errorMessage ?? 'Failed to collect necessary data.';
-        // Map status to user-friendly messages
+        bool showSettingsDialog = false;
+        String dialogTitle = 'Permission Required';
+        String dialogContent = '';
+        AppSettingsType settingsType = AppSettingsType.settings; // Default
+
         switch (dataResult.status) {
+          // --- Cases where Settings Dialog is appropriate ---
+          case AttendanceDataStatus.locationPermissionDeniedForever:
+            dialogTitle = 'Location Permission Required';
+            dialogContent =
+                'Location permission has been permanently denied. Please enable it in app settings to mark attendance.';
+            settingsType =
+                AppSettingsType.location; // Go directly to location settings
+            showSettingsDialog = true;
+            break;
+          case AttendanceDataStatus.microphonePermissionDeniedForever:
+            dialogTitle = 'Microphone Permission Required';
+            dialogContent =
+                'Microphone permission has been permanently denied. Please enable it in app settings for attendance verification.';
+            // No specific microphone type, use general settings
+            settingsType = AppSettingsType.settings;
+            showSettingsDialog = true;
+            break;
+          case AttendanceDataStatus.locationServiceDisabled:
+            dialogTitle = 'Location Services Disabled';
+            dialogContent =
+                'Location services are turned off on your device. Please enable them in settings to mark attendance.';
+            settingsType = AppSettingsType.location; // Go to location settings
+            showSettingsDialog = true;
+            break;
+
+          // --- Cases where a Snackbar is sufficient ---
           case AttendanceDataStatus.locationPermissionDenied:
             errorMsg = 'Location permission is required.';
             break;
-          case AttendanceDataStatus.locationPermissionDeniedForever:
-            errorMsg =
-                'Location permission permanently denied. Please enable in settings.';
-            break;
-          case AttendanceDataStatus.locationServiceDisabled:
-            errorMsg = 'Location services are disabled.';
+          case AttendanceDataStatus.microphonePermissionDenied:
+            errorMsg = 'Microphone permission is required.';
             break;
           case AttendanceDataStatus.locationTimeout:
             errorMsg = 'Could not get location/audio in time.';
@@ -332,24 +415,24 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
           case AttendanceDataStatus.locationIsMocked:
             errorMsg = 'Mock locations are not allowed.';
             break;
-          case AttendanceDataStatus.microphonePermissionDenied:
-            errorMsg = 'Microphone permission is required.';
-            break;
-          case AttendanceDataStatus.microphonePermissionDeniedForever:
-            errorMsg =
-                'Microphone permission permanently denied. Please enable in settings.';
-            break;
           case AttendanceDataStatus.recordingError:
             errorMsg = 'Failed to record audio.';
             break;
           case AttendanceDataStatus.locationError:
             errorMsg = 'Could not determine location.';
             break;
-          default:
-            break;
+          default: // Includes unknownError
+            break; // Use the default errorMsg
         }
-        _showSnackbar(errorMsg, isError: true);
-        _resetMarkingState(lectureSlug); // Reset state for this lecture
+
+        // Show Dialog or Snackbar based on the flag
+        if (showSettingsDialog) {
+          _showPermissionDialog(dialogTitle, dialogContent, settingsType);
+        } else {
+          _showSnackbar(errorMsg, isError: true);
+        }
+
+        _resetMarkingState(lectureSlug); // Reset state after handling error
         return; // Stop the process
       }
       // Check null safety again
@@ -359,18 +442,39 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         return;
       }
     }
+    if (initiator == 'auto' && kDebugMode) {
+      // We know dataResult and dataResult.audioBytes are non-null here
+      final savedPath = await _saveAudioForDebug(
+        dataResult!.audioBytes!,
+      ); // Use ! safely here because of the checks above
+      if (savedPath != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Debug audio saved:"),
+                const SizedBox(height: 4),
+                SelectableText(savedPath, style: const TextStyle(fontSize: 12)),
+              ],
+            ),
+            duration: const Duration(seconds: 10),
+            backgroundColor: Colors.teal,
+          ),
+        );
+      } else if (mounted) {
+        _showSnackbar(
+          "Could not save debug audio.",
+          isError: true,
+          backgroundColor: Colors.orange,
+        );
+      }
+    }
     _showSnackbar(
       initiator == 'auto' ? "Marking attendance..." : "Submitting request...",
       isError: false,
     );
-    String encodedDeviceId;
-    try {
-      encodedDeviceId = base64Encode(utf8.encode(_deviceId!));
-    } catch (e) {
-      _showSnackbar('Failed to prepare device identifier.', isError: true);
-      _resetMarkingState(lectureSlug);
-      return;
-    }
     try {
       final String url =
           initiator == 'auto'
@@ -381,7 +485,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         initiator: initiator,
         url: url,
         accessToken: _accessToken!,
-        deviceIdEncoded: encodedDeviceId,
+        deviceIdEncoded: base64Encode(utf8.encode(_deviceId!)),
         locationData: dataResult?.locationData, // Null for manual
         audioBytes: dataResult?.audioBytes, // Null for manual
         reason: reason, // Null for auto
@@ -418,16 +522,14 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         multipartRequest.headers['Authorization'] = 'Bearer $currentToken';
         multipartRequest.fields['device_id'] = deviceIdEncoded;
         multipartRequest.fields['latitude'] = locationData!.latitude.toString();
-        // Assumes locationData is non-null if multipart
         multipartRequest.fields['longitude'] =
             locationData.longitude.toString();
-        if (lectureSlug != null)
-          multipartRequest.fields['lecture_slug'] = lectureSlug;
+        multipartRequest.fields['lecture_slug'] = lectureSlug;
         // Add audio file
         multipartRequest.files.add(
           http.MultipartFile.fromBytes(
-            'audio', // Backend field name for the file
-            audioBytes!, // Assumes audioBytes is non-null if multipart
+            'audio',
+            audioBytes!,
             filename: 'attendance_audio.wav',
           ),
         );
@@ -463,8 +565,12 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
 
       if (!mounted) return;
 
-      final int statusCode = streamedResponse.statusCode;
-      final String responseBody = await streamedResponse.stream.bytesToString();
+      final http.Response response = await http.Response.fromStream(
+        streamedResponse,
+      );
+
+      final int statusCode = response.statusCode;
+      final String responseBody = response.body;
 
       debugPrint("API Response Status: $statusCode");
       debugPrint("API Response Body: $responseBody");
@@ -566,7 +672,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         String errorMessage = 'Server error';
         try {
           final responseData = jsonDecode(responseBody);
-          errorMessage = "${responseData['message']}" ?? errorMessage;
+          errorMessage = "${responseData['message']}";
         } catch (_) {
           /* Ignore if not JSON */
         }
@@ -637,17 +743,17 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   }
   // ------------------------------
 
-  // --- UI Helpers (Unchanged) ---
-  void _handleLogout() async {
-    await secureStorage.deleteAll();
-    if (mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const SplashScreen()),
-        (route) => false,
-      );
-    }
-  }
+  // // --- UI Helpers LOGOUT(Unchanged) ---
+  // void _handleLogout() async {
+  //   await secureStorage.deleteAll();
+  //   if (mounted) {
+  //     Navigator.pushAndRemoveUntil(
+  //       context,
+  //       MaterialPageRoute(builder: (context) => const SplashScreen()),
+  //       (route) => false,
+  //     );
+  //   }
+  // }
 
   void _handleFetchError(String message) {
     if (mounted) {
@@ -708,7 +814,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       appBar: AppBar(
         title: SizedBox(
           // height: kToolbarHeight - 2,
-          width: MediaQuery.of(context).size.width * 0.5, //100
+          width: MediaQuery.of(context).size.width * 0.4, //100
           child: Image.asset('assets/LOGO.webp', fit: BoxFit.contain),
         ), // Use the logo image
         // leading: IconButton(
@@ -897,8 +1003,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         attendanceData?['manual'] ?? false; // Might be useful later
     final bool isRegulizationRequested =
         attendanceData?['regulization_request'] ?? false; // *** NEW FLAG ***
-    final String? markingTime =
-        attendanceData?['marking_time']; // Might be useful later
+    // final String? markingTime = attendanceData?['marking_time']; // Might be useful later
 
     final String? activeStatus =
         sessionData?['active']?.toString().toLowerCase(); // Get active status
@@ -1285,9 +1390,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   // --- Helper: Shimmer Card Widget (Simplified) ---
   Widget _buildShimmerCard() {
     // Define placeholder color
-    final Color placeholderColor = Colors.white.withOpacity(
-      0.08,
-    ); // Subtle grey for dark theme
+    final Color placeholderColor =
+        Colors.white.withValues(); // Subtle grey for dark theme
     final BorderRadius borderRadius = BorderRadius.circular(4);
 
     return Padding(
@@ -1296,7 +1400,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       child: Card(
         // Use card theme or define style matching real cards
         elevation: 0, // Flatter look for skeleton
-        color: Colors.white.withOpacity(0.04), // Slightly different background
+        color: Colors.white.withValues(), // Slightly different background
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           // Optional: remove border or make it subtler for skeleton

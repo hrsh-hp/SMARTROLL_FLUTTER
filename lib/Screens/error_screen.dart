@@ -22,7 +22,7 @@ class ErrorScreen extends StatelessWidget {
       appBar: AppBar(
         title: SizedBox(
           // height: kToolbarHeight - 2,
-          width: MediaQuery.of(context).size.width * 0.5, //100
+          width: MediaQuery.of(context).size.width * 0.4, //100
           child: Image.asset('assets/LOGO.webp', fit: BoxFit.contain),
         ),
       ),

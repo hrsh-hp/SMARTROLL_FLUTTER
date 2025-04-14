@@ -7,7 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:root_jailbreak_sniffer/rjsniffer.dart';
 
 /// The base URL for the backend API.
-const String backendBaseUrl = "https://smartroll.live";
+// const String backendBaseUrl = "https://smartroll.live";
+const String backendBaseUrl = "https://clear-gently-coral.ngrok-free.app";
 
 /// A shared instance of FlutterSecureStorage for the entire application.
 final FlutterSecureStorage secureStorage = const FlutterSecureStorage();
@@ -37,7 +38,7 @@ class SecurityService {
     try {
       return await Rjsniffer.amICompromised() ?? false;
     } catch (e) {
-      print("Error checking compromised status: $e");
+      debugPrint("Error checking compromised status: $e");
       return false; // Assume not compromised if check fails
     }
   }
@@ -46,7 +47,7 @@ class SecurityService {
     try {
       return await Rjsniffer.amIDebugged() ?? false;
     } catch (e) {
-      print("Error checking compromised status: $e");
+      debugPrint("Error checking compromised status: $e");
       return false; // Assume not compromised if check fails
     }
   }
@@ -65,10 +66,10 @@ class SecurityService {
       );
       return isDevMode;
     } on PlatformException catch (e) {
-      print("Failed to check developer mode: '${e.message}'.");
+      debugPrint("Failed to check developer mode: '${e.message}'.");
       return false; // Assume disabled if check fails
     } catch (e) {
-      print("Unexpected error checking developer mode: $e");
+      debugPrint("Unexpected error checking developer mode: $e");
       return false;
     }
   }

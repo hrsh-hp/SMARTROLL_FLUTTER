@@ -123,17 +123,21 @@ class AttendanceDataCollector {
 
     var locationStatus =
         statuses[ph.Permission.location] ?? ph.PermissionStatus.denied;
-    if (locationStatus.isPermanentlyDenied)
+    if (locationStatus.isPermanentlyDenied) {
       return AttendanceDataStatus.locationPermissionDeniedForever;
-    if (!locationStatus.isGranted)
+    }
+    if (!locationStatus.isGranted) {
       return AttendanceDataStatus.locationPermissionDenied;
+    }
 
     var microphoneStatus =
         statuses[ph.Permission.microphone] ?? ph.PermissionStatus.denied;
-    if (microphoneStatus.isPermanentlyDenied)
+    if (microphoneStatus.isPermanentlyDenied) {
       return AttendanceDataStatus.microphonePermissionDeniedForever;
-    if (!microphoneStatus.isGranted)
+    }
+    if (!microphoneStatus.isGranted) {
       return AttendanceDataStatus.microphonePermissionDenied;
+    }
 
     return AttendanceDataStatus.success;
   }
@@ -163,7 +167,6 @@ class AttendanceDataCollector {
       );
 
       // --- Mock Location Check ---
-      // isMock returns bool? (nullable boolean)
       if (locationData.isMock == true) {
         // Check if explicitly true
         debugPrint("Mock location detected!");
@@ -173,7 +176,6 @@ class AttendanceDataCollector {
               'Mock location detected. Attendance marking disallowed.',
         );
       }
-      // --- End Mock Location Check ---
 
       // Log mock status even if false or null for debugging
       debugPrint(
@@ -208,7 +210,7 @@ class AttendanceDataCollector {
     final recorder = AudioRecorder();
 
     try {
-      // Permission should be checked already, but good practice
+      //   should be checked already, but good practice
       if (!await recorder.hasPermission()) {
         return AttendanceDataResult(
           status: AttendanceDataStatus.microphonePermissionDenied,

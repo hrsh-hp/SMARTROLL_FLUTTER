@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:smartroll/utils/Constants.dart';
+import 'package:smartroll/utils/constants.dart';
 import 'package:smartroll/utils/device_id_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 

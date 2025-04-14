@@ -23,7 +23,7 @@ android {
         applicationId = "com.yourcompany.smartroll"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 24//flutter.minSdkVersion
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -36,6 +36,10 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = true      // Removes unused code
             isShrinkResources = true     // Removes unused resources
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }

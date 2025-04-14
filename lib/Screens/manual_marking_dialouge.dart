@@ -104,7 +104,7 @@ class _ManualMarkingDialogState extends State<ManualMarkingDialog> {
                           : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.white.withOpacity(0.3),
+                    disabledBackgroundColor: Colors.white.withValues(),
                   ),
                   child: const Text(
                     'Submit',

@@ -1,6 +1,5 @@
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:smartroll/utils/Constants.dart'; // Assuming SecurityService is here or imported
+import 'package:smartroll/utils/constants.dart'; // Assuming SecurityService is here or imported
 import 'dart:async';
 
 // Import the AuthService and Enums
@@ -136,7 +135,7 @@ class _SplashScreenState extends State<SplashScreen>
 
               case TokenStatus.networkError:
               case TokenStatus.unknownError:
-              default:
+                // default:
                 debugPrint(
                   "SplashScreen - Token check error ($tokenStatus), logging out.",
                 );

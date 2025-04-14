@@ -7,7 +7,7 @@ import 'dart:convert';
 import 'dart:async';
 
 // Assuming constants.dart defines backendBaseUrl and secureStorage
-import 'Constants.dart';
+import '../utils/constants.dart';
 // Import screens needed for navigation IF handled here (less ideal)
 // import 'package:smartroll/Screens/login_screen.dart';
 
