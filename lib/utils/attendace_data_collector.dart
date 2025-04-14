@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:location/location.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:record/record.dart';
 
@@ -12,7 +14,7 @@ enum AttendanceDataStatus {
   locationServiceDisabled,
   locationTimeout,
   locationError,
-  locationIsMocked, // <-- ADDED
+  locationIsMocked,
   microphonePermissionDenied,
   microphonePermissionDeniedForever,
   recordingError,
@@ -24,12 +26,14 @@ class AttendanceDataResult {
   final LocationData? locationData;
   final Uint8List? audioBytes; // WAV blob
   final AttendanceDataStatus status;
+  final int? recordingStartTimeMillis;
   final String? errorMessage;
 
   AttendanceDataResult({
     this.locationData,
     this.audioBytes,
     required this.status,
+    this.recordingStartTimeMillis,
     this.errorMessage,
   });
 }
@@ -89,6 +93,10 @@ class AttendanceDataCollector {
         debugPrint("Audio recording failed: ${audioResult.status}");
         return audioResult; // Return the specific audio error result
       }
+      if (audioResult.recordingStartTimeMillis == null) {
+        debugPrint("Audio recording failed: ${audioResult.status}");
+        return audioResult; // Return the specific audio error result
+      }
 
       // --- Success ---
       debugPrint("Location and Audio collected successfully.");
@@ -96,6 +104,7 @@ class AttendanceDataCollector {
         status: AttendanceDataStatus.success,
         locationData: locationResult.locationData,
         audioBytes: audioResult.audioBytes,
+        recordingStartTimeMillis: audioResult.recordingStartTimeMillis,
       );
     } on TimeoutException {
       return AttendanceDataResult(
@@ -200,88 +209,128 @@ class AttendanceDataCollector {
   }
 
   /// Internal helper to record audio.
+  /// Internal helper to record audio to a temporary file and return bytes.
   Future<AttendanceDataResult> _recordAudio(Duration duration) async {
-    final completer = Completer<AttendanceDataResult>();
-    List<int> allBytes = [];
-    StreamSubscription? streamSubscription;
-    Timer? timer;
-
-    // Use a separate recorder instance for each call to avoid state issues
+    // Create a fresh recorder instance for each call
     final recorder = AudioRecorder();
+    int? recordingStartTimeMillis;
+    String? tempPath; // To store the temporary file path
 
     try {
-      //   should be checked already, but good practice
       if (!await recorder.hasPermission()) {
         return AttendanceDataResult(
           status: AttendanceDataStatus.microphonePermissionDenied,
         );
       }
 
-      debugPrint("Starting audio stream...");
-      final stream = await recorder.startStream(
-        const RecordConfig(encoder: AudioEncoder.wav),
-      );
+      // --- Get Temporary Directory ---
+      final Directory tempDir = await getTemporaryDirectory();
+      final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      tempPath = '${tempDir.path}/temp_attendance_audio_$timestamp.wav';
+      debugPrint("Audio recording temporary path: $tempPath");
+      // --- End Get Temporary Directory ---
 
-      streamSubscription = stream.listen(
-        (data) => allBytes.addAll(data),
-        onDone: () {
-          debugPrint("Audio stream finished.");
-          timer?.cancel(); // Cancel timer if stream finishes early
-          if (!completer.isCompleted) {
-            completer.complete(
-              AttendanceDataResult(
-                status: AttendanceDataStatus.success,
-                audioBytes: Uint8List.fromList(allBytes),
-              ),
-            );
-          }
-          recorder.dispose(); // Dispose here
-        },
-        onError: (error) {
-          debugPrint("Audio stream error: $error");
-          timer?.cancel();
-          if (!completer.isCompleted) {
-            completer.complete(
-              AttendanceDataResult(
-                status: AttendanceDataStatus.recordingError,
-                errorMessage: "Error during recording: $error",
-              ),
-            );
-          }
-          recorder.dispose(); // Dispose here
-        },
-        cancelOnError: true,
-      );
+      debugPrint("Starting audio recording to file...");
+      recordingStartTimeMillis = DateTime.now().millisecondsSinceEpoch;
 
-      timer = Timer(duration, () async {
-        debugPrint("Audio recording duration reached. Stopping stream...");
-        await streamSubscription?.cancel(); // Cancel first
-        if (await recorder.isRecording()) {
-          await recorder.stop(); // Stop should trigger onDone
-        }
-        // Safety net if onDone didn't complete quickly
-        if (!completer.isCompleted) {
-          debugPrint("Completing audio recording from timer.");
-          completer.complete(
-            AttendanceDataResult(
-              status: AttendanceDataStatus.success,
-              audioBytes: Uint8List.fromList(allBytes),
-            ),
+      // --- Start Recording to File ---
+      await recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.wav,
+          autoGain: true,
+        ), // Config remains the same
+        path: tempPath, // Provide the path
+      );
+      // --- End Start Recording to File ---
+
+      // Check state after starting
+      bool isRecording = await recorder.isRecording();
+      debugPrint("Audio recorder state after start: isRecording=$isRecording");
+      if (!isRecording) {
+        // If it failed to start recording immediately
+        throw Exception("Recorder failed to enter recording state.");
+      }
+
+      // --- Wait for Duration ---
+      // Use Future.delayed to wait for the recording duration
+      await Future.delayed(duration);
+
+      // --- Stop Recording ---
+      debugPrint("Recording duration reached. Stopping recorder...");
+      // Stop recording, get the final path (might be null if stopped early/error)
+      final String? finalPath = await recorder.stop();
+      debugPrint("Recorder stopped. Final path: $finalPath");
+
+      // --- Read Bytes from File ---
+      if (finalPath != null) {
+        final File audioFile = File(finalPath);
+        if (await audioFile.exists()) {
+          final Uint8List audioBytes = await audioFile.readAsBytes();
+          debugPrint(
+            "Successfully read ${audioBytes.length} bytes from temporary file.",
           );
-          await recorder.dispose(); // Dispose here
-        }
-      });
 
-      return completer.future;
+          // --- Delete Temporary File ---
+          try {
+            await audioFile.delete();
+            debugPrint("Temporary audio file deleted: $finalPath");
+          } catch (e) {
+            debugPrint(
+              "Warning: Failed to delete temporary audio file $finalPath: $e",
+            );
+          }
+          // --- End Delete Temporary File ---
+
+          // --- Success ---
+          return AttendanceDataResult(
+            status: AttendanceDataStatus.success,
+            audioBytes: audioBytes,
+            recordingStartTimeMillis: recordingStartTimeMillis,
+          );
+        } else {
+          debugPrint(
+            "Error: Temporary audio file does not exist after recording: $finalPath",
+          );
+          return AttendanceDataResult(
+            status: AttendanceDataStatus.recordingError,
+            errorMessage: "Recorded audio file was not found.",
+            recordingStartTimeMillis: recordingStartTimeMillis,
+          );
+        }
+      } else {
+        // recorder.stop() returned null, indicating an issue during recording/stopping
+        debugPrint("Error: recorder.stop() returned null.");
+        return AttendanceDataResult(
+          status: AttendanceDataStatus.recordingError,
+          errorMessage: "Recording process failed to complete successfully.",
+          recordingStartTimeMillis: recordingStartTimeMillis,
+        );
+      }
     } catch (e) {
-      debugPrint("Error starting audio recording: $e");
-      timer?.cancel();
-      await streamSubscription?.cancel();
-      await _disposeRecorder(recorder); // Use helper to dispose
+      debugPrint("Error during audio recording process: $e");
+      // Attempt to clean up the temp file if path exists and error occurred
+      if (tempPath != null) {
+        try {
+          final File tempFile = File(tempPath);
+          if (await tempFile.exists()) {
+            await tempFile.delete();
+            debugPrint("Cleaned up temporary audio file on error: $tempPath");
+          }
+        } catch (cleanupError) {
+          debugPrint(
+            "Error during error cleanup (deleting temp file): $cleanupError",
+          );
+        }
+      }
       return AttendanceDataResult(
         status: AttendanceDataStatus.recordingError,
-        errorMessage: "Failed to start recording: ${e.toString()}",
+        errorMessage: "Failed to record audio: ${e.toString()}",
+        recordingStartTimeMillis:
+            recordingStartTimeMillis, // Include if captured
       );
+    } finally {
+      // Ensure recorder is disposed
+      await _disposeRecorder(recorder);
     }
   }
 
@@ -321,3 +370,60 @@ class AttendanceDataCollector {
   //   _disposeRecorder(); // Dispose the default instance if needed
   // }
 }
+
+
+// Future<String?> _saveAudioForDebug(Uint8List audioBytes) async {
+//     if (!kDebugMode) {
+//       // Only run this function in debug mode
+//       return null;
+//     }
+
+//     Directory? directory;
+//     try {
+//       // Try getting the public Downloads directory first
+//       // Note: Access might be restricted on newer Android versions without specific permissions
+//       // or might return an app-specific directory within Downloads.
+//       if (Platform.isAndroid) {
+//         directory =
+//             await getExternalStorageDirectory(); // Gets primary external storage
+//         // Try to navigate to a common Downloads path if possible (might fail)
+//         String downloadsPath = '${directory?.path}/Download';
+//         directory = Directory(downloadsPath);
+//         // Check if it exists, if not, fall back to the base external path
+//         if (!await directory.exists()) {
+//           directory = await getExternalStorageDirectory();
+//         }
+//       } else if (Platform.isIOS) {
+//         // On iOS, saving to 'Downloads' isn't standard via path_provider.
+//         // Saving to ApplicationDocumentsDirectory is more common and accessible via Files app.
+//         directory = await getApplicationDocumentsDirectory();
+//       }
+
+//       if (directory == null) {
+//         debugPrint(
+//           "Could not determine suitable directory for saving debug audio.",
+//         );
+//         return null;
+//       }
+
+//       // Ensure the directory exists (especially the Downloads subdirectory on Android)
+//       if (!await directory.exists()) {
+//         await directory.create(recursive: true);
+//       }
+
+//       // Create a unique filename
+//       final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+//       final String fileName = 'attendance_audio_$timestamp.wav';
+//       final String filePath = '${directory.path}/$fileName';
+
+//       // Write the file
+//       final File audioFile = File(filePath);
+//       await audioFile.writeAsBytes(audioBytes);
+
+//       debugPrint("Debug audio saved to: $filePath");
+//       return filePath; // Return the path
+//     } catch (e) {
+//       debugPrint("Error saving debug audio: $e");
+//       return null; // Return null on failure
+//     }
+//   }

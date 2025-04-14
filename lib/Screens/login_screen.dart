@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:smartroll/utils/constants.dart';
 import 'package:smartroll/utils/device_id_service.dart';
+import 'package:smartroll/utils/effects.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class LoginScreen extends StatefulWidget {

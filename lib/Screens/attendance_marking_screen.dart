@@ -13,6 +13,7 @@ import 'package:smartroll/utils/constants.dart';
 import 'package:smartroll/utils/attendace_data_collector.dart';
 import 'package:smartroll/utils/auth_service.dart';
 import 'package:smartroll/utils/device_id_service.dart'; // Ensure this path is correct
+import 'package:smartroll/utils/effects.dart';
 import 'error_screen.dart'; // Ensure this path is correct
 import 'package:path_provider/path_provider.dart';
 
@@ -44,88 +45,12 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   // State for button disabling and loading indicators per lecture
   final Map<String, bool> _isMarkingLecture = {};
   final Map<String, String> _markingInitiator = {};
-  // Animation controller for the shimmer effect
-  late AnimationController _shimmerController;
-  late Animation<double> _fadeAnimation;
   // ---------------------
 
   @override
   void initState() {
     super.initState();
-    _shimmerController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    );
-    _fadeAnimation = Tween<double>(begin: 0.3, end: 0.9).animate(
-      CurvedAnimation(
-        parent: _shimmerController,
-        curve: Curves.easeInOut, // Smooth transition
-      ),
-    );
-    _shimmerController.repeat(reverse: true);
     _initializeAndFetchData();
-  }
-
-  @override
-  void dispose() {
-    _shimmerController.dispose();
-    super.dispose();
-  }
-
-  Future<String?> _saveAudioForDebug(Uint8List audioBytes) async {
-    if (!kDebugMode) {
-      // Only run this function in debug mode
-      return null;
-    }
-
-    Directory? directory;
-    try {
-      // Try getting the public Downloads directory first
-      // Note: Access might be restricted on newer Android versions without specific permissions
-      // or might return an app-specific directory within Downloads.
-      if (Platform.isAndroid) {
-        directory =
-            await getExternalStorageDirectory(); // Gets primary external storage
-        // Try to navigate to a common Downloads path if possible (might fail)
-        String downloadsPath = '${directory?.path}/Downloads';
-        directory = Directory(downloadsPath);
-        // Check if it exists, if not, fall back to the base external path
-        if (!await directory.exists()) {
-          directory = await getExternalStorageDirectory();
-        }
-      } else if (Platform.isIOS) {
-        // On iOS, saving to 'Downloads' isn't standard via path_provider.
-        // Saving to ApplicationDocumentsDirectory is more common and accessible via Files app.
-        directory = await getApplicationDocumentsDirectory();
-      }
-
-      if (directory == null) {
-        debugPrint(
-          "Could not determine suitable directory for saving debug audio.",
-        );
-        return null;
-      }
-
-      // Ensure the directory exists (especially the Downloads subdirectory on Android)
-      if (!await directory.exists()) {
-        await directory.create(recursive: true);
-      }
-
-      // Create a unique filename
-      final String timestamp = DateTime.now().millisecondsSinceEpoch as String;
-      final String fileName = 'attendance_audio_$timestamp.wav';
-      final String filePath = '${directory.path}/$fileName';
-
-      // Write the file
-      final File audioFile = File(filePath);
-      await audioFile.writeAsBytes(audioBytes);
-
-      debugPrint("Debug audio saved to: $filePath");
-      return filePath; // Return the path
-    } catch (e) {
-      debugPrint("Error saving debug audio: $e");
-      return null; // Return null on failure
-    }
   }
 
   Future<void> _loadAccessToken() async {
@@ -349,19 +274,21 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
 
     AttendanceDataResult? dataResult;
     if (initiator == 'auto') {
-      dataResult = await _dataCollector.collectData(
-        recordingDuration: const Duration(seconds: 10),
-      );
       _showSnackbar(
         "Collecting surrounding data please do not close the app...",
         isError: false,
-        duration: const Duration(seconds: 12),
+        duration: const Duration(seconds: 8),
       );
+      dataResult = await _dataCollector.collectData(
+        recordingDuration: const Duration(seconds: 5),
+      );
+
       if (!mounted) return;
+      
       ScaffoldMessenger.of(
         context,
       ).hideCurrentSnackBar(); // Hide collecting message
-
+      
       if (!mounted) {
         _resetMarkingState(lectureSlug);
         return;
@@ -436,41 +363,18 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         return; // Stop the process
       }
       // Check null safety again
-      if (dataResult.locationData == null || dataResult.audioBytes == null) {
+      debugPrint(
+        "recording start time is ${dataResult.recordingStartTimeMillis}",
+      );
+      if (dataResult.locationData == null ||
+          dataResult.audioBytes == null ||
+          dataResult.recordingStartTimeMillis == null) {
         _showSnackbar('Collected data is incomplete.', isError: true);
         _resetMarkingState(lectureSlug);
         return;
       }
     }
-    if (initiator == 'auto' && kDebugMode) {
-      // We know dataResult and dataResult.audioBytes are non-null here
-      final savedPath = await _saveAudioForDebug(
-        dataResult!.audioBytes!,
-      ); // Use ! safely here because of the checks above
-      if (savedPath != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("Debug audio saved:"),
-                const SizedBox(height: 4),
-                SelectableText(savedPath, style: const TextStyle(fontSize: 12)),
-              ],
-            ),
-            duration: const Duration(seconds: 10),
-            backgroundColor: Colors.teal,
-          ),
-        );
-      } else if (mounted) {
-        _showSnackbar(
-          "Could not save debug audio.",
-          isError: true,
-          backgroundColor: Colors.orange,
-        );
-      }
-    }
+
     _showSnackbar(
       initiator == 'auto' ? "Marking attendance..." : "Submitting request...",
       isError: false,
@@ -488,6 +392,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         deviceIdEncoded: base64Encode(utf8.encode(_deviceId!)),
         locationData: dataResult?.locationData, // Null for manual
         audioBytes: dataResult?.audioBytes, // Null for manual
+        recordingStartTimeMillis: dataResult?.recordingStartTimeMillis,
         reason: reason, // Null for auto
       );
       if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -510,6 +415,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
     required String deviceIdEncoded,
     LocationData? locationData, // Nullable
     Uint8List? audioBytes, // Nullable
+    int? recordingStartTimeMillis, // Nullable
     String? reason, // Nullable
   }) async {
     http.BaseRequest request;
@@ -518,6 +424,18 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
     // --- Function to build the request (used for initial and retry) ---
     http.BaseRequest buildRequest(String currentToken) {
       if (isMultipart) {
+        assert(
+          locationData != null,
+          'LocationData cannot be null for multipart request',
+        );
+        assert(
+          audioBytes != null,
+          'AudioBytes cannot be null for multipart request',
+        );
+        assert(
+          recordingStartTimeMillis != null,
+          'RecordingStartTimeMillis cannot be null for multipart request',
+        ); //
         final multipartRequest = http.MultipartRequest('POST', Uri.parse(url));
         multipartRequest.headers['Authorization'] = 'Bearer $currentToken';
         multipartRequest.fields['device_id'] = deviceIdEncoded;
@@ -525,6 +443,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         multipartRequest.fields['longitude'] =
             locationData.longitude.toString();
         multipartRequest.fields['lecture_slug'] = lectureSlug;
+        multipartRequest.fields['start_time'] =
+            recordingStartTimeMillis!.toString();
         // Add audio file
         multipartRequest.files.add(
           http.MultipartFile.fromBytes(
@@ -837,7 +757,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   // --- Body Builder with Dividers and Styled Header ---
   Widget _buildBodyWithDividers() {
     if (_isLoadingTimetable) {
-      return _buildLoadingShimmer();
+      return const LoadingShimmer();
     }
     if (_fetchErrorMessage != null) {
       return _buildErrorState();
@@ -1367,97 +1287,6 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  // --- Helper: Loading State Widget ---
-  // --- Helper: Loading State Widget (Simplified) ---
-  Widget _buildLoadingShimmer() {
-    // Use ListView.builder for efficiency if list can be long,
-    // or Column + List.generate if always short. ListView is fine.
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 10), // Reduced padding
-      itemCount: 3, // Show 3 skeleton items (adjust as needed)
-      itemBuilder: (context, index) {
-        // Directly build the shimmer card, no separate group needed for this simple version
-        return _buildShimmerCard();
-      },
-    );
-  }
-
-  // --- Helper: Shimmer Card Widget (Simplified) ---
-  Widget _buildShimmerCard() {
-    // Define placeholder color
-    final Color placeholderColor =
-        Colors.white.withValues(); // Subtle grey for dark theme
-    final BorderRadius borderRadius = BorderRadius.circular(4);
-
-    return Padding(
-      // Use the same padding as real cards for consistency
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Card(
-        // Use card theme or define style matching real cards
-        elevation: 0, // Flatter look for skeleton
-        color: Colors.white.withValues(), // Slightly different background
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          // Optional: remove border or make it subtler for skeleton
-          // side: BorderSide(color: Colors.grey[850]!, width: 1),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Shimmer for Subject Name (Full Width)
-              FadeTransition(
-                opacity: _fadeAnimation,
-                child: Container(
-                  height: 20, // Adjust height
-                  width: double.infinity, // Take full width
-                  decoration: BoxDecoration(
-                    color: placeholderColor,
-                    borderRadius: borderRadius,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              // Shimmer for Subject Code (Shorter Width)
-              FadeTransition(
-                opacity: _fadeAnimation,
-                child: Container(
-                  height: 14, // Adjust height
-                  width: 100, // Fixed shorter width
-                  decoration: BoxDecoration(
-                    color: placeholderColor,
-                    borderRadius: borderRadius,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18), // More space before details
-              // Shimmer for Detail Lines (Time, Teacher, Location)
-              // Combine into one loop for simplicity
-              for (int i = 0; i < 3; i++) ...[
-                FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: Container(
-                    height: 14, // Adjust height
-                    // Vary widths slightly for realism
-                    width: i == 0 ? 150 : (i == 1 ? 180 : 130),
-                    decoration: BoxDecoration(
-                      color: placeholderColor,
-                      borderRadius: borderRadius,
-                    ),
-                  ),
-                ),
-                // Add space only between lines
-                if (i < 2) const SizedBox(height: 10),
-              ],
-            ],
-          ),
         ),
       ),
     );
