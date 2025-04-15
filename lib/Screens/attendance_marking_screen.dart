@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:app_settings/app_settings.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -15,7 +13,6 @@ import 'package:smartroll/utils/auth_service.dart';
 import 'package:smartroll/utils/device_id_service.dart'; // Ensure this path is correct
 import 'package:smartroll/utils/effects.dart';
 import 'error_screen.dart'; // Ensure this path is correct
-import 'package:path_provider/path_provider.dart';
 
 // --- Centralized Configuration ---
 const String _backendBaseUrl = backendBaseUrl;
@@ -166,39 +163,130 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
     String content,
     AppSettingsType settingsType,
   ) {
-    if (!mounted) return;
+    if (!mounted) return; // Check if widget is still active
 
-    showDialog(
-      context: context, // Use the widget's context
-      barrierDismissible: false, // User must interact with the dialog
-      builder:
-          (BuildContext dialogContext) => AlertDialog(
-            backgroundColor: Colors.grey[900],
-            title: Text(title),
-            content: Text(content, style: TextStyle(color: Colors.grey[300])),
-            actions: <Widget>[
-              TextButton(
-                child: const Text('Cancel'),
-                onPressed:
-                    () => Navigator.of(dialogContext).pop(), // Close the dialog
+    final theme = Theme.of(context); // Get theme data
+
+    showModalBottomSheet(
+      context: context,
+      // Make it non-dismissible by tapping outside or dragging down
+      isDismissible: false,
+      enableDrag: false,
+      // Use transparent background for the sheet itself to show container's shape
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext sheetContext) {
+        // Use a container for background color and rounded corners
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+          decoration: BoxDecoration(
+            color: Colors.grey[900], // Dark background matching dialog
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(20.0),
+            ), // Rounded top corners
+          ),
+          // Use Column with min size to wrap content height
+          child: Column(
+            mainAxisSize: MainAxisSize.min, // Important to fit content
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              // Icon at the top
+              Icon(
+                // Choose an icon relevant to the permission type or a general one
+                settingsType == AppSettingsType.location
+                    ? Icons.location_on
+                    : Icons.mic, // Example: use notification bell
+                color:
+                    theme
+                        .colorScheme
+                        .primary, // Use theme's primary color (blue)
+                size: 48,
               ),
-              TextButton(
-                child: const Text('Open Settings'),
-                onPressed: () {
-                  Navigator.of(dialogContext).pop(); // Close the dialog first
-                  // Use the app_settings package to open the relevant settings screen
-                  AppSettings.openAppSettings(type: settingsType).catchError((
-                    error,
-                  ) {
-                    // Optional: Handle error if settings cannot be opened
-                    if (mounted) {
-                      _showSnackbar("Could not open settings.", isError: true);
-                    }
-                  });
-                },
+              const SizedBox(height: 16),
+
+              // Title
+              Text(
+                title, // Use the passed title
+                textAlign: TextAlign.center,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
+              const SizedBox(height: 12),
+
+              // Content/Message
+              Text(
+                content, // Use the passed content
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey[400], // Lighter grey for content
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 28), // Space before buttons
+              // Buttons Row
+              Row(
+                children: [
+                  // Deny Button (Less prominent)
+                  Expanded(
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.grey[400], // Grey text color
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          // Optional: Add side border if needed
+                          // side: BorderSide(color: Colors.grey[700]!)
+                        ),
+                      ),
+                      child: const Text('DENY'), // Match casing
+                      onPressed:
+                          () =>
+                              Navigator.of(
+                                sheetContext,
+                              ).pop(), // Close the sheet
+                    ),
+                  ),
+                  const SizedBox(width: 12), // Space between buttons
+                  // Settings Button (Primary action)
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            theme.colorScheme.primary, // Blue background
+                        foregroundColor:
+                            theme.colorScheme.onPrimary, // White text
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      child: const Text('SETTINGS'), // Match casing
+                      onPressed: () {
+                        Navigator.of(
+                          sheetContext,
+                        ).pop(); // Close the sheet first
+                        // Open the specific settings screen
+                        AppSettings.openAppSettings(
+                          type: settingsType,
+                        ).catchError((error) {
+                          debugPrint("Error opening settings: $error");
+                          _showSnackbar(
+                            "Could not open settings automatically.",
+                            isError: true,
+                          );
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8), // Padding at the bottom
             ],
           ),
+        );
+      },
     );
   }
 
@@ -222,7 +310,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       debugPrint("Error re-checking dev mode and debugger: $e");
     }
 
-    if (devModeEnabledNow && !debuggerAttachedNow) {
+    if (devModeEnabledNow || debuggerAttachedNow) {
       debugPrint("Developer mode detected at time of marking. Aborting.");
       if (mounted) {
         // _showSnackbar(
@@ -284,11 +372,10 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       );
 
       if (!mounted) return;
-      
-      ScaffoldMessenger.of(
-        context,
-      ).hideCurrentSnackBar(); // Hide collecting message
-      
+      // ScaffoldMessenger.of(
+      //   context,
+      // ).hideCurrentSnackBar(); // Hide collecting message
+
       if (!mounted) {
         _resetMarkingState(lectureSlug);
         return;
@@ -306,7 +393,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         switch (dataResult.status) {
           // --- Cases where Settings Dialog is appropriate ---
           case AttendanceDataStatus.locationPermissionDeniedForever:
-            dialogTitle = 'Location Permission Required';
+            dialogTitle = 'Location Permission';
             dialogContent =
                 'Location permission has been permanently denied. Please enable it in app settings to mark attendance.';
             settingsType =
@@ -314,7 +401,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
             showSettingsDialog = true;
             break;
           case AttendanceDataStatus.microphonePermissionDeniedForever:
-            dialogTitle = 'Microphone Permission Required';
+            dialogTitle = 'Microphone Permission';
             dialogContent =
                 'Microphone permission has been permanently denied. Please enable it in app settings for attendance verification.';
             // No specific microphone type, use general settings
@@ -814,7 +901,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
 
     return RefreshIndicator(
       onRefresh: () => _fetchTimetableData(showLoading: false),
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.primary,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
@@ -863,10 +950,10 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
                   Expanded(
                     child: Text(
                       item['branchName'],
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.primary,
                         letterSpacing: 0.5,
                       ),
                       textAlign:
@@ -974,10 +1061,10 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
                       children: [
                         Text(
                           subjectName,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                           softWrap: true, // Allow text to wrap to the next line
                           maxLines: 2, // Limit to a maximum of 2 lines
@@ -1059,8 +1146,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
                       ),
                       child: Text(
                         lectureType,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -1110,8 +1197,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
                     ? null
                     : () => _handleMarkAttendance(lecture),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -1145,7 +1232,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
                     : () => _showManualMarkingDialog(lecture),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blue[800],
-              foregroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.primary,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -1155,12 +1242,14 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
             ),
             child:
                 isCurrentlyMarking && initiator == 'manual'
-                    ? const SizedBox(
+                    ? SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                     )
                     : const Text(
@@ -1238,8 +1327,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
 
           Text(
             statusText,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -1273,7 +1362,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
+                backgroundColor: Theme.of(context).colorScheme.primary,
                 foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,
@@ -1314,7 +1403,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
             icon: const Icon(Icons.refresh),
             label: const Text('Check Again'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
+              backgroundColor: Theme.of(context).colorScheme.primary,
               foregroundColor: Theme.of(context).colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),

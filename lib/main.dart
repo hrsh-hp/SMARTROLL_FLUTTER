@@ -95,7 +95,13 @@ class _MyAppState extends State<MyApp> {
       title: 'SmartRoll Attendance',
       theme: ThemeData(
         brightness: Brightness.dark,
-        primarySwatch: Colors.blue,
+        primaryColor: Colors.white,
+        colorScheme: ColorScheme.dark(
+          primary: Colors.white,
+          secondary: Colors.grey,
+          surface: const Color(0xFF000000),
+          onPrimary: const Color(0xFF000000),
+        ),
         scaffoldBackgroundColor: const Color(0xFF000000),
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFF000000),

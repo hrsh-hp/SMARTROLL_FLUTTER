@@ -50,7 +50,7 @@ class _ManualMarkingDialogState extends State<ManualMarkingDialog> {
             Text(
               'Manual Marking',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.primary,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -103,12 +103,15 @@ class _ManualMarkingDialogState extends State<ManualMarkingDialog> {
                           }
                           : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.white.withOpacity(0.3),
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    disabledBackgroundColor:
+                        Theme.of(context).colorScheme.primary.withValues(),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Submit',
-                    style: TextStyle(color: Colors.black),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    ),
                   ),
                 ),
               ],

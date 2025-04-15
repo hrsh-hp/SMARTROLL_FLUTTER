@@ -46,7 +46,7 @@ class ErrorScreen extends StatelessWidget {
               Text(
                 'Something Went Wrong', // A slightly friendlier title
                 style: textTheme.headlineSmall?.copyWith(
-                  color: Colors.white, // Keep title white for contrast
+                  color: Theme.of(context).colorScheme.primary, // Keep title white for contrast
                   fontWeight: FontWeight.w600,
                 ),
                 textAlign: TextAlign.center,
@@ -67,7 +67,7 @@ class ErrorScreen extends StatelessWidget {
               if (showRetryButton)
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
                     foregroundColor:
                         colorScheme.onPrimary, // Text color on primary
                     padding: const EdgeInsets.symmetric(
