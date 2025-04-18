@@ -5,14 +5,17 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:location/location.dart';
+
 import 'package:smartroll/Screens/login_screen.dart';
-import 'package:smartroll/Screens/manual_marking_dialouge.dart'; // Ensure this path is correct
+import 'package:smartroll/Screens/dialogue_utils.dart'; // Ensure this path is correct
+import 'package:smartroll/utils/mark_attendance_service.dart';
+import 'error_screen.dart'; // Ensure this path is correct
+
 import 'package:smartroll/utils/constants.dart';
 import 'package:smartroll/utils/attendace_data_collector.dart';
 import 'package:smartroll/utils/auth_service.dart';
 import 'package:smartroll/utils/device_id_service.dart'; // Ensure this path is correct
 import 'package:smartroll/utils/effects.dart';
-import 'error_screen.dart'; // Ensure this path is correct
 
 // --- Centralized Configuration ---
 const String _backendBaseUrl = backendBaseUrl;
@@ -32,6 +35,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   final SecurityService _securityService = SecurityService();
   final AttendanceDataCollector _dataCollector = AttendanceDataCollector();
 
+  late final MarkAttendaceService _attendanceHandlerService;
+
   // --- State Variables (Original Names) ---
   bool _isLoadingTimetable = true;
   String? _fetchErrorMessage;
@@ -47,6 +52,12 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   @override
   void initState() {
     super.initState();
+    _attendanceHandlerService = MarkAttendaceService(
+      securityService: _securityService,
+      dataCollector: _dataCollector,
+      authService: _authService,
+      deviceIDService: deviceIdService,
+    );
     _initializeAndFetchData();
   }
 
@@ -157,549 +168,6 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
     }
   }
 
-  // --- Helper Function for Permission Dialog ---
-  void _showPermissionDialog(
-    String title,
-    String content,
-    AppSettingsType settingsType,
-  ) {
-    if (!mounted) return; // Check if widget is still active
-
-    final theme = Theme.of(context); // Get theme data
-
-    showModalBottomSheet(
-      context: context,
-      // Make it non-dismissible by tapping outside or dragging down
-      isDismissible: false,
-      enableDrag: false,
-      // Use transparent background for the sheet itself to show container's shape
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext sheetContext) {
-        // Use a container for background color and rounded corners
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-          decoration: BoxDecoration(
-            color: Colors.grey[900], // Dark background matching dialog
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(20.0),
-            ), // Rounded top corners
-          ),
-          // Use Column with min size to wrap content height
-          child: Column(
-            mainAxisSize: MainAxisSize.min, // Important to fit content
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              // Icon at the top
-              Icon(
-                // Choose an icon relevant to the permission type or a general one
-                settingsType == AppSettingsType.location
-                    ? Icons.location_on
-                    : Icons.mic, // Example: use notification bell
-                color:
-                    theme
-                        .colorScheme
-                        .primary, // Use theme's primary color (blue)
-                size: 48,
-              ),
-              const SizedBox(height: 16),
-
-              // Title
-              Text(
-                title, // Use the passed title
-                textAlign: TextAlign.center,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Content/Message
-              Text(
-                content, // Use the passed content
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[400], // Lighter grey for content
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 28), // Space before buttons
-              // Buttons Row
-              Row(
-                children: [
-                  // Deny Button (Less prominent)
-                  Expanded(
-                    child: TextButton(
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.grey[400], // Grey text color
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          // Optional: Add side border if needed
-                          // side: BorderSide(color: Colors.grey[700]!)
-                        ),
-                      ),
-                      child: const Text('DENY'), // Match casing
-                      onPressed:
-                          () =>
-                              Navigator.of(
-                                sheetContext,
-                              ).pop(), // Close the sheet
-                    ),
-                  ),
-                  const SizedBox(width: 12), // Space between buttons
-                  // Settings Button (Primary action)
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            theme.colorScheme.primary, // Blue background
-                        foregroundColor:
-                            theme.colorScheme.onPrimary, // White text
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        textStyle: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      child: const Text('SETTINGS'), // Match casing
-                      onPressed: () {
-                        Navigator.of(
-                          sheetContext,
-                        ).pop(); // Close the sheet first
-                        // Open the specific settings screen
-                        AppSettings.openAppSettings(
-                          type: settingsType,
-                        ).catchError((error) {
-                          debugPrint("Error opening settings: $error");
-                          _showSnackbar(
-                            "Could not open settings automatically.",
-                            isError: true,
-                          );
-                        });
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8), // Padding at the bottom
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // --- Attendance Marking Logic ---
-  Future<void> _handleMarkAttendance(dynamic lecture, {String? reason}) async {
-    final String lectureSlug = lecture['slug'];
-    if (_isMarkingLecture[lectureSlug] == true) return;
-
-    final String initiator = reason == null ? 'auto' : 'manual';
-    if (!mounted) return;
-
-    // 1. Developer Mode Check (at time of marking)
-    bool devModeEnabledNow = false;
-    bool debuggerAttachedNow = false;
-    try {
-      // Assuming you have access to SecurityService instance (_securityService)
-      final checksresults = await _securityService.runAllChecks();
-      devModeEnabledNow = checksresults['isDeveloperModeEnabled'] ?? false;
-      debuggerAttachedNow = checksresults['isDebuggerAttached'] ?? false;
-    } catch (e) {
-      debugPrint("Error re-checking dev mode and debugger: $e");
-    }
-
-    if (devModeEnabledNow || debuggerAttachedNow) {
-      debugPrint("Developer mode detected at time of marking. Aborting.");
-      if (mounted) {
-        // _showSnackbar(
-        //   "Attendance marking disabled while Developer Options are active.",
-        //   isError: true,
-        // );
-        _handleCriticalError(
-          "Attendance marking disabled while ${devModeEnabledNow ? "Developer Options are active." : "Debugger is Attached."}",
-        );
-      }
-      // _resetMarkingState(lectureSlug);
-      return; // Stop the marking process
-    }
-
-    // 2. Connectivity Check
-    final bool connected = await NetwrokUtils.isConnected();
-    if (!connected) {
-      _handleCriticalError(
-        "No internet connection. Please connect and try again.",
-      );
-      return; // Stop execution
-    }
-
-    // 3. Token & Device ID Check
-    if (_accessToken == null) {
-      _showSnackbar("Authentication error.", isError: true);
-      _resetMarkingState(lectureSlug);
-      return;
-    }
-    if (_deviceId == null) {
-      _showSnackbar("Device Identification error. Retrying...", isError: true);
-      await _getAndStoreDeviceId();
-      if (!mounted) {
-        _resetMarkingState(lectureSlug);
-        return;
-      }
-      if (_deviceId == null) {
-        _showSnackbar("Could not get Device ID.", isError: true);
-        _resetMarkingState(lectureSlug);
-        return;
-      }
-    }
-
-    //4. collecting loaction and audio
-    setState(() {
-      _isMarkingLecture[lectureSlug] = true;
-      _markingInitiator[lectureSlug] = initiator;
-    });
-
-    AttendanceDataResult? dataResult;
-    if (initiator == 'auto') {
-      _showSnackbar(
-        "Collecting surrounding data please do not close the app...",
-        isError: false,
-        duration: const Duration(seconds: 8),
-      );
-      dataResult = await _dataCollector.collectData(
-        recordingDuration: const Duration(seconds: 5),
-      );
-
-      if (!mounted) return;
-      // ScaffoldMessenger.of(
-      //   context,
-      // ).hideCurrentSnackBar(); // Hide collecting message
-
-      if (!mounted) {
-        _resetMarkingState(lectureSlug);
-        return;
-      }
-
-      // Handle data collection failure
-      if (dataResult.status != AttendanceDataStatus.success) {
-        String errorMsg =
-            dataResult.errorMessage ?? 'Failed to collect necessary data.';
-        bool showSettingsDialog = false;
-        String dialogTitle = 'Permission Required';
-        String dialogContent = '';
-        AppSettingsType settingsType = AppSettingsType.settings; // Default
-
-        switch (dataResult.status) {
-          // --- Cases where Settings Dialog is appropriate ---
-          case AttendanceDataStatus.locationPermissionDeniedForever:
-            dialogTitle = 'Location Permission';
-            dialogContent =
-                'Location permission has been permanently denied. Please enable it in app settings to mark attendance.';
-            settingsType =
-                AppSettingsType.location; // Go directly to location settings
-            showSettingsDialog = true;
-            break;
-          case AttendanceDataStatus.microphonePermissionDeniedForever:
-            dialogTitle = 'Microphone Permission';
-            dialogContent =
-                'Microphone permission has been permanently denied. Please enable it in app settings for attendance verification.';
-            // No specific microphone type, use general settings
-            settingsType = AppSettingsType.settings;
-            showSettingsDialog = true;
-            break;
-          case AttendanceDataStatus.locationServiceDisabled:
-            dialogTitle = 'Location Services Disabled';
-            dialogContent =
-                'Location services are turned off on your device. Please enable them in settings to mark attendance.';
-            settingsType = AppSettingsType.location; // Go to location settings
-            showSettingsDialog = true;
-            break;
-
-          // --- Cases where a Snackbar is sufficient ---
-          case AttendanceDataStatus.locationPermissionDenied:
-            errorMsg = 'Location permission is required.';
-            break;
-          case AttendanceDataStatus.microphonePermissionDenied:
-            errorMsg = 'Microphone permission is required.';
-            break;
-          case AttendanceDataStatus.locationTimeout:
-            errorMsg = 'Could not get location/audio in time.';
-            break;
-          case AttendanceDataStatus.locationIsMocked:
-            errorMsg = 'Mock locations are not allowed.';
-            break;
-          case AttendanceDataStatus.recordingError:
-            errorMsg = 'Failed to record audio.';
-            break;
-          case AttendanceDataStatus.locationError:
-            errorMsg = 'Could not determine location.';
-            break;
-          default: // Includes unknownError
-            break; // Use the default errorMsg
-        }
-
-        // Show Dialog or Snackbar based on the flag
-        if (showSettingsDialog) {
-          _showPermissionDialog(dialogTitle, dialogContent, settingsType);
-        } else {
-          _showSnackbar(errorMsg, isError: true);
-        }
-
-        _resetMarkingState(lectureSlug); // Reset state after handling error
-        return; // Stop the process
-      }
-      // Check null safety again
-      debugPrint(
-        "recording start time is ${dataResult.recordingStartTimeMillis}",
-      );
-      if (dataResult.locationData == null ||
-          dataResult.audioBytes == null ||
-          dataResult.recordingStartTimeMillis == null) {
-        _showSnackbar('Collected data is incomplete.', isError: true);
-        _resetMarkingState(lectureSlug);
-        return;
-      }
-    }
-
-    _showSnackbar(
-      initiator == 'auto' ? "Marking attendance..." : "Submitting request...",
-      isError: false,
-    );
-    try {
-      final String url =
-          initiator == 'auto'
-              ? '$backendBaseUrl/api/manage/session/mark_attendance_for_student/'
-              : '$backendBaseUrl/api/manage/session/mark_for_regulization/';
-      await _makeApiRequestWithRetry(
-        lectureSlug: lectureSlug,
-        initiator: initiator,
-        url: url,
-        accessToken: _accessToken!,
-        deviceIdEncoded: base64Encode(utf8.encode(_deviceId!)),
-        locationData: dataResult?.locationData, // Null for manual
-        audioBytes: dataResult?.audioBytes, // Null for manual
-        recordingStartTimeMillis: dataResult?.recordingStartTimeMillis,
-        reason: reason, // Null for auto
-      );
-      if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-      // Reset state is handled within _makeApiRequestWithRetry's finally block
-    } catch (e) {
-      debugPrint('Error: ${e.toString()}');
-      _showSnackbar('Something went wrong. Please try again.', isError: true);
-    } finally {
-      _resetMarkingState(lectureSlug);
-    }
-  }
-
-  // --- Helper Function for API Request with Retry Logic ---
-  Future<void> _makeApiRequestWithRetry({
-    required String lectureSlug,
-    required String initiator,
-    required String url,
-    required String accessToken,
-    required String deviceIdEncoded,
-    LocationData? locationData, // Nullable
-    Uint8List? audioBytes, // Nullable
-    int? recordingStartTimeMillis, // Nullable
-    String? reason, // Nullable
-  }) async {
-    http.BaseRequest request;
-    bool isMultipart = initiator == 'auto';
-
-    // --- Function to build the request (used for initial and retry) ---
-    http.BaseRequest buildRequest(String currentToken) {
-      if (isMultipart) {
-        assert(
-          locationData != null,
-          'LocationData cannot be null for multipart request',
-        );
-        assert(
-          audioBytes != null,
-          'AudioBytes cannot be null for multipart request',
-        );
-        assert(
-          recordingStartTimeMillis != null,
-          'RecordingStartTimeMillis cannot be null for multipart request',
-        ); //
-        final multipartRequest = http.MultipartRequest('POST', Uri.parse(url));
-        multipartRequest.headers['Authorization'] = 'Bearer $currentToken';
-        multipartRequest.fields['device_id'] = deviceIdEncoded;
-        multipartRequest.fields['latitude'] = locationData!.latitude.toString();
-        multipartRequest.fields['longitude'] =
-            locationData.longitude.toString();
-        multipartRequest.fields['lecture_slug'] = lectureSlug;
-        multipartRequest.fields['start_time'] =
-            recordingStartTimeMillis!.toString();
-        // Add audio file
-        multipartRequest.files.add(
-          http.MultipartFile.fromBytes(
-            'audio',
-            audioBytes!,
-            filename: 'attendance_audio.wav',
-          ),
-        );
-        return multipartRequest;
-      } else {
-        // Standard JSON POST for manual request
-        final jsonRequest = http.Request('POST', Uri.parse(url));
-        jsonRequest.headers['Authorization'] = 'Bearer $currentToken';
-        jsonRequest.headers['Content-Type'] = 'application/json';
-        final Map<String, dynamic> requestBody = {
-          'lecture_slug': lectureSlug,
-          'device_id': deviceIdEncoded,
-          if (reason != null) 'regulization_commet': reason,
-        };
-        jsonRequest.body = jsonEncode(requestBody);
-        return jsonRequest;
-      }
-    }
-    // --- End buildRequest function ---
-
-    try {
-      request = buildRequest(accessToken); // Build initial request
-
-      // --- Send Request (Initial Attempt) ---
-      final http.StreamedResponse streamedResponse = await (request
-                  is http.MultipartRequest
-              ? request.send()
-              : http.Client().send(
-                request,
-              ) // Need Client().send for http.Request
-              )
-          .timeout(const Duration(seconds: 30));
-
-      if (!mounted) return;
-
-      final http.Response response = await http.Response.fromStream(
-        streamedResponse,
-      );
-
-      final int statusCode = response.statusCode;
-      final String responseBody = response.body;
-
-      debugPrint("API Response Status: $statusCode");
-      debugPrint("API Response Body: $responseBody");
-
-      // --- Handle Response ---
-      if (statusCode == 200 || statusCode == 201) {
-        // Success
-        final responseData = jsonDecode(responseBody);
-        if (responseData['data'] == true && responseData['code'] == 100) {
-          _showSnackbar(
-            initiator == 'auto'
-                ? 'Attendance marked!'
-                : 'Manual request submitted!',
-            isError: false,
-          );
-          await _fetchTimetableData(showLoading: false); // Refresh silently
-        } else {
-          throw Exception(
-            responseData['message'] ??
-                (initiator == 'auto' ? 'Failed to mark' : 'Failed to submit'),
-          );
-        }
-      } else if (statusCode == 401 || statusCode == 403) {
-        // --- Handle Auth Error & Retry ---
-        debugPrint("Received 401/403. Attempting token refresh...");
-        final refreshResult = await _authService.attemptTokenRefresh();
-
-        if (refreshResult == RefreshStatus.success) {
-          debugPrint("Refresh successful. Retrying original request...");
-          await _loadAccessToken(); // Reload the new token into _accessToken
-          if (_accessToken == null || _accessToken!.isEmpty) {
-            throw Exception(
-              'Refresh reported success but new token is missing.',
-            );
-          }
-
-          // Build retry request with NEW token
-          final retryRequest = buildRequest(_accessToken!);
-
-          // Send Retry Request
-          final http.StreamedResponse retryStreamedResponse =
-              await (retryRequest is http.MultipartRequest
-                      ? retryRequest.send()
-                      : http.Client().send(retryRequest))
-                  .timeout(const Duration(seconds: 30));
-
-          if (!mounted) return;
-
-          final int retryStatusCode = retryStreamedResponse.statusCode;
-          final String retryResponseBody =
-              await retryStreamedResponse.stream.bytesToString();
-
-          debugPrint("API Retry Response Status: $retryStatusCode");
-          debugPrint("API Retry Response Body: $retryResponseBody");
-
-          // Handle Retry Response
-          if (retryStatusCode == 200 || retryStatusCode == 201) {
-            final retryResponseData = jsonDecode(retryResponseBody);
-            if (retryResponseData['data'] == true &&
-                retryResponseData['code'] == 100) {
-              _showSnackbar(
-                initiator == 'auto'
-                    ? 'Attendance marked!'
-                    : 'Manual request submitted!',
-                isError: false,
-              );
-              await _fetchTimetableData(showLoading: false);
-            } else {
-              throw Exception(
-                retryResponseData['message'] ?? 'Failed after refresh',
-              );
-            }
-          } else {
-            // Retry also failed
-            throw Exception(
-              'Failed to mark attendance after refresh (Status: $retryStatusCode).',
-            );
-          }
-        } else {
-          // Refresh failed, logout
-          debugPrint("Refresh failed. Logging out.");
-          await _authService.clearTokens();
-          if (mounted) {
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(
-                builder:
-                    (context) => LoginScreen(
-                      initialMessage: 'Session expired. Please log in again.',
-                    ),
-              ), // Pass message
-              (route) => false,
-            );
-          }
-          // No need to throw exception here, navigation handles it
-        }
-      } else {
-        // Other non-200, non-401/403 errors
-        String errorMessage = 'Server error';
-        try {
-          final responseData = jsonDecode(responseBody);
-          errorMessage = "${responseData['message']}";
-        } catch (_) {
-          /* Ignore if not JSON */
-        }
-        throw Exception('$errorMessage (Status: $statusCode)');
-      }
-    } catch (e) {
-      // Catch all errors from API call, refresh, or retry
-      debugPrint('API Request/Retry Error: ${e.toString()}');
-      _showSnackbar(
-        e is Exception
-            ? e.toString().replaceFirst('Exception: ', '')
-            : 'Something went wrong. Please try again.',
-        isError: true,
-      );
-    } finally {
-      // Always reset the marking state for this specific lecture
-      _resetMarkingState(lectureSlug);
-    }
-  }
-
   void _resetMarkingState(String lectureSlug) {
     if (mounted) {
       setState(() {
@@ -712,41 +180,65 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
 
   // --- Manual Marking Dialog Call (ADDED ROBUSTNESS) ---
   void _showManualMarkingDialog(dynamic lecture) {
-    // Defensive check for lecture structure before accessing nested keys
-    String subjectName = 'Unknown Subject';
-    try {
-      // Check if keys exist before accessing them
-      if (lecture != null &&
-          lecture['subject'] is Map &&
-          lecture['subject']['subject_map'] is Map &&
-          lecture['subject']['subject_map']['subject_name'] != null) {
-        subjectName = lecture['subject']['subject_map']['subject_name'];
-      } else {
-        debugPrint(
-          "Warning: Could not extract subject name from lecture object: $lecture",
-        );
-      }
-    } catch (e) {
-      debugPrint("Error extracting subject name: $e. Lecture object: $lecture");
-      // Keep default subjectName
-    }
-    showDialog(
+    DialogUtils.showManualMarkingDialog(
+      // Call the static method
       context: context,
-      barrierDismissible: false, // Good practice while submitting
-      builder:
-          (context) => ManualMarkingDialog(
-            subjectName: subjectName, // Pass the safely extracted name
-            onSubmit: (reason) {
-              // Navigator.of(context).pop(); // Close dialog
-              // Call the original handler, passing the original lecture object
-              _handleMarkAttendance(lecture, reason: reason);
-            },
-          ),
-    ).catchError((error) {
-      // Catch potential errors during dialog build/display
-      debugPrint("Error showing dialog: $error");
-      _showSnackbar("Could not open manual marking dialog.", isError: true);
-    });
+      subjectName:
+          lecture['subject']?['subject_map']?['subject_name'] ??
+          'Unknown Subject',
+      onSubmit: (String reason) {
+        // Callback triggers the service call
+        _attendanceHandlerService.handleAttendance(
+          context: context,
+          setState: setState,
+          isMarkingLecture: _isMarkingLecture,
+          markingInitiator: _markingInitiator,
+          resetMarkingState: _resetMarkingState,
+          lecture: lecture, // Pass the original lecture data
+          currentAccessToken: _accessToken,
+          currentDeviceId: _deviceId,
+          showSnackbar: _showSnackbar,
+          handleCriticalError: _handleCriticalError,
+          fetchTimetableData: _fetchTimetableData,
+          getAndStoreDeviceId: _getAndStoreDeviceId,
+          loadAccessToken: _loadAccessToken,
+          reason: reason, // Pass the reason collected from the sheet
+        );
+      },
+    );
+    // showDialog(
+    //   context: context,
+    //   barrierDismissible: false, // Good practice while submitting
+    //   builder:
+    //       (context) => ManualMarkingialog(
+    //         subjectName: subjectName, // Pass the safely extracted name
+    //         onSubmit: (reason) {
+    //           // Navigator.of(context).pop(); // Close dialog
+    //           // Call the original handler, passing the original lecture object
+    //           _attendanceHandlerService.handleAttendance(
+    //             context: context,
+    //             setState: setState,
+    //             isMarkingLecture: _isMarkingLecture,
+    //             markingInitiator: _markingInitiator,
+    //             resetMarkingState: _resetMarkingState,
+    //             lecture: lecture, // Pass the original lecture data
+    //             currentAccessToken: _accessToken,
+    //             currentDeviceId: _deviceId,
+    //             showSnackbar: _showSnackbar,
+    //             showPermissionDialog: _showPermissionDialog,
+    //             handleCriticalError: _handleCriticalError,
+    //             fetchTimetableData: _fetchTimetableData,
+    //             getAndStoreDeviceId: _getAndStoreDeviceId,
+    //             loadAccessToken: _loadAccessToken,
+    //             reason: reason, // Pass the reason collected from the sheet
+    //           );
+    //         },
+    //       ),
+    // ).catchError((error) {
+    //   // Catch potential errors during dialog build/display
+    //   debugPrint("Error showing dialog: $error");
+    //   _showSnackbar("Could not open manual marking dialog.", isError: true);
+    // });
   }
   // ------------------------------
 
@@ -1195,7 +687,24 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
             onPressed:
                 isMarked || isCurrentlyMarking
                     ? null
-                    : () => _handleMarkAttendance(lecture),
+                    : () {
+                      _attendanceHandlerService.handleAttendance(
+                        context: context,
+                        setState: setState,
+                        isMarkingLecture: _isMarkingLecture,
+                        markingInitiator: _markingInitiator,
+                        resetMarkingState: _resetMarkingState,
+                        lecture: lecture,
+                        currentAccessToken: _accessToken,
+                        currentDeviceId: _deviceId,
+                        showSnackbar: _showSnackbar,
+                        handleCriticalError: _handleCriticalError,
+                        fetchTimetableData: _fetchTimetableData,
+                        getAndStoreDeviceId: _getAndStoreDeviceId,
+                        loadAccessToken: _loadAccessToken,
+                        reason: null, // Indicate 'auto' marking
+                      );
+                    },
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.primary,
               foregroundColor: Theme.of(context).colorScheme.onPrimary,

@@ -237,7 +237,10 @@ class AttendanceDataCollector {
       await recorder.start(
         const RecordConfig(
           encoder: AudioEncoder.wav,
-          autoGain: true,
+          autoGain: false,
+          noiseSuppress: false,
+          echoCancel: false,
+          numChannels: 1,
         ), // Config remains the same
         path: tempPath, // Provide the path
       );
@@ -372,58 +375,69 @@ class AttendanceDataCollector {
 }
 
 
-// Future<String?> _saveAudioForDebug(Uint8List audioBytes) async {
-//     if (!kDebugMode) {
-//       // Only run this function in debug mode
-//       return null;
-//     }
+  // final savedPath = await _saveAudioForDebug(dataResult!.audioBytes!);
+  // if (savedPath != null && mounted) {
+  //   // Show snackbar indicating save location (optional now)
+  //   _showSnackbar(
+  //     "Debug audio saved. Preparing share...",
+  //     isError: false,
+  //     backgroundColor: Colors.teal,
+  //     duration: Duration(seconds: 2),
+  //   );
+  // }
+  // Future<String?> _saveAudioForDebug(Uint8List audioBytes) async {
+  //   if (!kDebugMode) {
+  //     // Only run this function in debug mode
+  //     return null;
+  //   }
 
-//     Directory? directory;
-//     try {
-//       // Try getting the public Downloads directory first
-//       // Note: Access might be restricted on newer Android versions without specific permissions
-//       // or might return an app-specific directory within Downloads.
-//       if (Platform.isAndroid) {
-//         directory =
-//             await getExternalStorageDirectory(); // Gets primary external storage
-//         // Try to navigate to a common Downloads path if possible (might fail)
-//         String downloadsPath = '${directory?.path}/Download';
-//         directory = Directory(downloadsPath);
-//         // Check if it exists, if not, fall back to the base external path
-//         if (!await directory.exists()) {
-//           directory = await getExternalStorageDirectory();
-//         }
-//       } else if (Platform.isIOS) {
-//         // On iOS, saving to 'Downloads' isn't standard via path_provider.
-//         // Saving to ApplicationDocumentsDirectory is more common and accessible via Files app.
-//         directory = await getApplicationDocumentsDirectory();
-//       }
+  //   Directory? directory;
+  //   try {
+  //     // Try getting the public Downloads directory first
+  //     // Note: Access might be restricted on newer Android versions without specific permissions
+  //     // or might return an app-specific directory within Downloads.
+  //     if (Platform.isAndroid) {
+  //       directory =
+  //           await getExternalStorageDirectory(); // Gets primary external storage
+  //       // Try to navigate to a common Downloads path if possible (might fail)
+  //       String downloadsPath = '${directory?.path}/Download';
+  //       directory = Directory(downloadsPath);
+  //       // Check if it exists, if not, fall back to the base external path
+  //       if (!await directory.exists()) {
+  //         directory = await getExternalStorageDirectory();
+  //       }
+  //     } else if (Platform.isIOS) {
+  //       // On iOS, saving to 'Downloads' isn't standard via path_provider.
+  //       // Saving to ApplicationDocumentsDirectory is more common and accessible via Files app.
+  //       directory = await getApplicationDocumentsDirectory();
+  //     }
 
-//       if (directory == null) {
-//         debugPrint(
-//           "Could not determine suitable directory for saving debug audio.",
-//         );
-//         return null;
-//       }
+  //     if (directory == null) {
+  //       debugPrint(
+  //         "Could not determine suitable directory for saving debug audio.",
+  //       );
+  //       return null;
+  //     }
 
-//       // Ensure the directory exists (especially the Downloads subdirectory on Android)
-//       if (!await directory.exists()) {
-//         await directory.create(recursive: true);
-//       }
+  //     // Ensure the directory exists (especially the Downloads subdirectory on Android)
+  //     if (!await directory.exists()) {
+  //       await directory.create(recursive: true);
+  //     }
 
-//       // Create a unique filename
-//       final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-//       final String fileName = 'attendance_audio_$timestamp.wav';
-//       final String filePath = '${directory.path}/$fileName';
+  //     // Create a unique filename
+  //     final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+  //     final String fileName = 'attendance_audio_$timestamp.wav';
+  //     final String filePath = '${directory.path}/$fileName';
 
-//       // Write the file
-//       final File audioFile = File(filePath);
-//       await audioFile.writeAsBytes(audioBytes);
+  //     // Write the file
+  //     final File audioFile = File(filePath);
+  //     await audioFile.writeAsBytes(audioBytes);
 
-//       debugPrint("Debug audio saved to: $filePath");
-//       return filePath; // Return the path
-//     } catch (e) {
-//       debugPrint("Error saving debug audio: $e");
-//       return null; // Return null on failure
-//     }
-//   }
+  //     debugPrint("Debug audio saved to: $filePath");
+  //     return filePath; // Return the path
+  //   } catch (e) {
+  //     debugPrint("Error saving debug audio: $e");
+  //     return null; // Return null on failure
+  //   }
+  // }
+
