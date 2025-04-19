@@ -241,8 +241,9 @@ class AttendanceDataCollector {
           noiseSuppress: false,
           echoCancel: false,
           numChannels: 1,
+          sampleRate: 16000,
         ), // Config remains the same
-        path: tempPath, // Provide the path
+        path: tempPath,
       );
       // --- End Start Recording to File ---
 

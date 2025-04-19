@@ -38,7 +38,7 @@ class DialogUtils {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
-              Icon(iconData, color: colorScheme.primary, size: 48),
+              Icon(iconData, color: colorScheme.onPrimary, size: 48),
               const SizedBox(height: 16),
               Text(
                 title,

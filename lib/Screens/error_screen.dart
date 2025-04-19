@@ -46,7 +46,10 @@ class ErrorScreen extends StatelessWidget {
               Text(
                 'Something Went Wrong', // A slightly friendlier title
                 style: textTheme.headlineSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.primary, // Keep title white for contrast
+                  color:
+                      Theme.of(
+                        context,
+                      ).colorScheme.primary, // Keep title white for contrast
                   fontWeight: FontWeight.w600,
                 ),
                 textAlign: TextAlign.center,
@@ -58,7 +61,7 @@ class ErrorScreen extends StatelessWidget {
                 message,
                 textAlign: TextAlign.center,
                 style: textTheme.bodyLarge?.copyWith(
-                  color: Colors.grey[400], // Lighter grey for message body
+                  color: Colors.grey[600], // Lighter grey for message body
                   height: 1.4, // Improve line spacing for readability
                 ),
               ),
@@ -78,9 +81,7 @@ class ErrorScreen extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        10,
-                      ), // Consistent rounding
+                      borderRadius: BorderRadius.circular(10), //  rounding
                     ),
                   ),
                   icon: const Icon(Icons.refresh_outlined, size: 20),

@@ -32,8 +32,8 @@ class ShimmerWidget extends StatefulWidget {
 
   const ShimmerWidget({
     required this.child,
-    this.baseColor = const Color(0xFF212121),
-    this.highlightColor = const Color(0xFFFFFFFF), // Slightly lighter highlight
+    this.baseColor = const Color(0xFF000000),
+    this.highlightColor = const Color(0xFFDEDEDE), // Slightly lighter highlight
     this.duration = const Duration(milliseconds: 1000),
     this.gradientPatternWidth = 0.5, // Default width of the moving band
     super.key,
@@ -118,12 +118,17 @@ class _LoadingShimmerState extends State<LoadingShimmer>
     with SingleTickerProviderStateMixin {
   late AnimationController _shimmerController;
 
+  // Define shimmer colors suitable for light theme
+  final Color _shimmerBaseColor = Colors.grey.shade200; // Lighter base
+  final Color _shimmerHighlightColor =
+      Colors.grey.shade100; // Lighter highlight
+
   @override
   void initState() {
     super.initState();
     _shimmerController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000), // Slower animation
+      duration: const Duration(milliseconds: 1500), // Slightly faster maybe?
     )..repeat();
   }
 
@@ -133,110 +138,112 @@ class _LoadingShimmerState extends State<LoadingShimmer>
     super.dispose();
   }
 
+  // Helper to build the animated gradient
+  LinearGradient _buildShimmerGradient() {
+    return LinearGradient(
+      colors: [_shimmerBaseColor, _shimmerHighlightColor, _shimmerBaseColor],
+      stops: [
+        _shimmerController.value - 0.3, // Adjust stops for desired effect
+        _shimmerController.value,
+        _shimmerController.value + 0.3,
+      ],
+      begin: const Alignment(-1.0, -0.3), // Adjust gradient angle if needed
+      end: const Alignment(1.0, 0.3),
+      tileMode: TileMode.clamp,
+    );
+  }
+
+  // Helper to build a single shimmer placeholder box
+  Widget _buildShimmerBox({required double height, double? width}) {
+    return AnimatedBuilder(
+      animation: _shimmerController,
+      builder: (context, child) {
+        return Container(
+          height: height,
+          width: width ?? double.infinity, // Default to full width
+          decoration: BoxDecoration(
+            // Use base color for the background of the box
+            color: _shimmerBaseColor,
+            // Apply the animated gradient
+            gradient: _buildShimmerGradient(),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildShimmerCard() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Card(
-        elevation: 2, // Reduced elevation
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.grey[850]!, width: 1),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Subject name shimmer
-              AnimatedBuilder(
-                animation: _shimmerController,
-                builder: (context, child) {
-                  return Container(
-                    width: double.infinity,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[800],
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.grey[900]!,
-                          Colors.grey[850]!,
-                          Colors.grey[900]!,
-                        ],
-                        stops: [0.0, _shimmerController.value, 1.0],
+    // Use the CardTheme margin for spacing, remove outer Padding
+    return Card(
+      // Card styling (elevation, shape, border, margin, color)
+      // is now inherited from Theme.of(context).cardTheme
+      // Ensure CardTheme is defined correctly in main.dart
+      // margin: EdgeInsets.zero, // Only if CardTheme margin is unwanted here
+      clipBehavior: Clip.antiAlias, // Good practice with gradients/borders
+      child: Padding(
+        padding: const EdgeInsets.all(16), // Inner padding for content
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Subject name shimmer (Larger height)
+            _buildShimmerBox(height: 22), // Adjusted height
+            const SizedBox(height: 8),
+
+            // Subject code shimmer (Shorter width)
+            _buildShimmerBox(height: 16, width: 100), // Adjusted height & width
+            const SizedBox(height: 10),
+
+            // Type Chip shimmer (Small rectangle)
+            _buildShimmerBox(height: 20, width: 60),
+            const SizedBox(height: 16),
+
+            // Teacher/Semester Info rows (Text lines)
+            _buildShimmerBox(height: 14, width: 180), // Adjusted height & width
+            const SizedBox(height: 8),
+            _buildShimmerBox(height: 14, width: 150), // Adjusted height & width
+            const SizedBox(height: 16),
+
+            // Classroom, Time, Date info rows (Icon + Text line)
+            ...List.generate(
+              3,
+              (index) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    // Icon placeholder (using a simple grey box)
+                    Container(
+                      height: 18,
+                      width: 18,
+                      decoration: BoxDecoration(
+                        color:
+                            Colors
+                                .grey
+                                .shade300, // Slightly darker grey for icon placeholder
+                        borderRadius: BorderRadius.circular(4),
                       ),
-                      borderRadius: BorderRadius.circular(4),
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 8),
-              // Subject code shimmer
-              AnimatedBuilder(
-                animation: _shimmerController,
-                builder: (context, child) {
-                  return Container(
-                    width: 120,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[800],
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.grey[900]!,
-                          Colors.grey[850]!,
-                          Colors.grey[900]!,
-                        ],
-                        stops: [0.0, _shimmerController.value, 1.0],
-                      ),
-                      borderRadius: BorderRadius.circular(4),
+                    // Icon( // Or use actual icons with muted theme color
+                    //   index == 0
+                    //       ? Icons.group_outlined // Match actual icons used
+                    //       : index == 1
+                    //           ? Icons.access_time_outlined
+                    //           : Icons.calendar_today_outlined,
+                    //   size: 18,
+                    //   // Use theme color with opacity for muted look
+                    //   color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+                    // ),
+                    const SizedBox(width: 8),
+                    // Text line placeholder next to icon
+                    Expanded(
+                      // Allow it to take remaining space
+                      child: _buildShimmerBox(height: 14), // Adjusted height
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              // Time, Teacher, Location info rows
-              ...List.generate(
-                3,
-                (index) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      Icon(
-                        index == 0
-                            ? Icons.access_time
-                            : index == 1
-                            ? Icons.person_outline
-                            : Icons.location_on_outlined,
-                        size: 16,
-                        color: Colors.grey[700],
-                      ),
-                      const SizedBox(width: 8),
-                      AnimatedBuilder(
-                        animation: _shimmerController,
-                        builder: (context, child) {
-                          return Container(
-                            width: 150,
-                            height: 16,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[800],
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.grey[900]!,
-                                  Colors.grey[850]!,
-                                  Colors.grey[900]!,
-                                ],
-                                stops: [0.0, _shimmerController.value, 1.0],
-                              ),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -245,8 +252,11 @@ class _LoadingShimmerState extends State<LoadingShimmer>
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      itemCount: 3, // Show 3 skeleton cards
+      // Adjust padding based on CardTheme margin and desired list spacing
+      padding: const EdgeInsets.symmetric(
+        vertical: 8.0,
+      ), // Minimal list padding
+      itemCount: 4, // Show a few skeleton cards
       itemBuilder: (context, index) => _buildShimmerCard(),
     );
   }

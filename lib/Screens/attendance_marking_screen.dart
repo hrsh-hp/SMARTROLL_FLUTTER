@@ -1,13 +1,10 @@
-import 'package:app_settings/app_settings.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
-import 'package:location/location.dart';
 
-import 'package:smartroll/Screens/login_screen.dart';
 import 'package:smartroll/Screens/dialogue_utils.dart'; // Ensure this path is correct
+import 'package:smartroll/Screens/splash_screen.dart';
 import 'package:smartroll/utils/mark_attendance_service.dart';
 import 'error_screen.dart'; // Ensure this path is correct
 
@@ -47,6 +44,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   // State for button disabling and loading indicators per lecture
   final Map<String, bool> _isMarkingLecture = {};
   final Map<String, String> _markingInitiator = {};
+  List<Map<String, dynamic>> _groupedTimetableData = [];
+
   // ---------------------
 
   @override
@@ -100,6 +99,54 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
     }
   }
 
+  // This function processes the raw API data into the grouped structure
+  void _processAndGroupTimetableData(List<dynamic> rawData) {
+    List<Map<String, dynamic>> groupedData = [];
+
+    for (var streamGroup in rawData) {
+      final String currentBranchName =
+          streamGroup['stream']?['branch']?['branch_name'] ?? 'Unknown Branch';
+      final List<dynamic> timetables =
+          streamGroup['timetables'] as List<dynamic>? ?? [];
+      List<dynamic> lecturesInBranch = [];
+
+      for (var timetable in timetables) {
+        if (timetable != null) {
+          lecturesInBranch.addAll(
+            timetable['lectures'] as List<dynamic>? ?? [],
+          );
+        }
+      }
+
+      // Sort lectures within the branch by start time
+      lecturesInBranch.sort((a, b) {
+        try {
+          final timeA = DateFormat("HH:mm").parse(a['start_time']);
+          final timeB = DateFormat("HH:mm").parse(b['start_time']);
+          return timeA.compareTo(timeB);
+        } catch (e) {
+          return 0; // Keep original order on error
+        }
+      });
+
+      // Only add the branch group if it has lectures
+      if (lecturesInBranch.isNotEmpty) {
+        groupedData.add({
+          'branchName': currentBranchName,
+          'lectures': lecturesInBranch,
+        });
+      }
+    }
+
+    // --- Update the state variable ---
+    if (mounted) {
+      setState(() {
+        _groupedTimetableData = groupedData;
+        _fetchErrorMessage = null; // Clear previous errors if successful
+      });
+    }
+  }
+
   Future<void> _fetchTimetableData({bool showLoading = true}) async {
     final bool connected = await NetwrokUtils.isConnected();
     if (!mounted) return;
@@ -137,8 +184,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         final decodedBody = jsonDecode(response.body);
         if (decodedBody['error'] == false && decodedBody['data'] is List) {
           setState(() {
-            _timetableData = decodedBody['data'];
-            _fetchErrorMessage = null;
+            _processAndGroupTimetableData(decodedBody['data']);
           });
         } else {
           throw Exception(decodedBody['message'] ?? 'Failed to parse data');
@@ -206,53 +252,20 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         );
       },
     );
-    // showDialog(
-    //   context: context,
-    //   barrierDismissible: false, // Good practice while submitting
-    //   builder:
-    //       (context) => ManualMarkingialog(
-    //         subjectName: subjectName, // Pass the safely extracted name
-    //         onSubmit: (reason) {
-    //           // Navigator.of(context).pop(); // Close dialog
-    //           // Call the original handler, passing the original lecture object
-    //           _attendanceHandlerService.handleAttendance(
-    //             context: context,
-    //             setState: setState,
-    //             isMarkingLecture: _isMarkingLecture,
-    //             markingInitiator: _markingInitiator,
-    //             resetMarkingState: _resetMarkingState,
-    //             lecture: lecture, // Pass the original lecture data
-    //             currentAccessToken: _accessToken,
-    //             currentDeviceId: _deviceId,
-    //             showSnackbar: _showSnackbar,
-    //             showPermissionDialog: _showPermissionDialog,
-    //             handleCriticalError: _handleCriticalError,
-    //             fetchTimetableData: _fetchTimetableData,
-    //             getAndStoreDeviceId: _getAndStoreDeviceId,
-    //             loadAccessToken: _loadAccessToken,
-    //             reason: reason, // Pass the reason collected from the sheet
-    //           );
-    //         },
-    //       ),
-    // ).catchError((error) {
-    //   // Catch potential errors during dialog build/display
-    //   debugPrint("Error showing dialog: $error");
-    //   _showSnackbar("Could not open manual marking dialog.", isError: true);
-    // });
   }
   // ------------------------------
 
   // // --- UI Helpers LOGOUT(Unchanged) ---
-  // void _handleLogout() async {
-  //   await secureStorage.deleteAll();
-  //   if (mounted) {
-  //     Navigator.pushAndRemoveUntil(
-  //       context,
-  //       MaterialPageRoute(builder: (context) => const SplashScreen()),
-  //       (route) => false,
-  //     );
-  //   }
-  // }
+  void _handleLogout() async {
+    await secureStorage.deleteAll();
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const SplashScreen()),
+        (route) => false,
+      );
+    }
+  }
 
   void _handleFetchError(String message) {
     if (mounted) {
@@ -311,6 +324,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        elevation: 3,
         title: SizedBox(
           // height: kToolbarHeight - 2,
           width: MediaQuery.of(context).size.width * 0.4, //100
@@ -325,9 +339,9 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         //           ? null
         //           : () => _fetchTimetableData(showLoading: true),
         // ),
-        // actions: [
-        //   IconButton(icon: const Icon(Icons.logout), onPressed: _handleLogout),
-        // ],
+        actions: [
+          IconButton(icon: const Icon(Icons.logout), onPressed: _handleLogout),
+        ],
       ),
       body: _buildBodyWithDividers(), // Call the new body builder
     );
@@ -336,151 +350,92 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   // --- Body Builder with Dividers and Styled Header ---
   Widget _buildBodyWithDividers() {
     if (_isLoadingTimetable) {
-      return const LoadingShimmer();
+      return const LoadingShimmer(); // Or your preferred loading indicator
     }
     if (_fetchErrorMessage != null) {
       return _buildErrorState();
     }
-
-    List<Map<String, dynamic>> flattenedLectures = [];
-    String? previousBranchSlug;
-
-    for (var streamGroup in _timetableData) {
-      final String currentBranchName =
-          streamGroup['stream']?['branch']?['branch_name'] ?? 'Unknown Branch';
-      final String currentBranchSlug =
-          streamGroup['stream']?['branch']?['slug'] ?? currentBranchName;
-      final List<dynamic> timetables =
-          streamGroup['timetables'] as List<dynamic>? ?? [];
-      List<dynamic> lecturesInBranch = [];
-      for (var timetable in timetables) {
-        final schedule = timetable['schedule'] as Map<String, dynamic>?;
-        if (schedule != null) {
-          lecturesInBranch.addAll(schedule['lectures'] as List<dynamic>? ?? []);
-        }
-      }
-      lecturesInBranch.sort((a, b) {
-        try {
-          final timeA = DateFormat("HH:mm:ss").parse(a['start_time']);
-          final timeB = DateFormat("HH:mm:ss").parse(b['start_time']);
-          return timeA.compareTo(timeB);
-        } catch (e) {
-          return 0;
-        }
-      });
-
-      if (lecturesInBranch.isNotEmpty) {
-        if (previousBranchSlug != null &&
-            previousBranchSlug != currentBranchSlug) {
-          flattenedLectures.add({'isDivider': true});
-        }
-        // Add the header item
-        flattenedLectures.add({
-          'isHeader': true,
-          'branchName': currentBranchName,
-        });
-        // Add lecture items
-        for (var lecture in lecturesInBranch) {
-          flattenedLectures.add({'isLecture': true, 'data': lecture});
-        }
-        previousBranchSlug = currentBranchSlug;
-      }
-    }
-
-    if (flattenedLectures.isEmpty) {
+    if (_groupedTimetableData.isEmpty) {
       return _buildEmptyState();
     }
 
     return RefreshIndicator(
       onRefresh: () => _fetchTimetableData(showLoading: false),
-      color: Theme.of(context).colorScheme.primary,
+      color: Theme.of(context).colorScheme.primary, // Adjust as needed
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       child: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-        itemCount: flattenedLectures.length,
+        // Let the outer card's margin handle spacing, adjust list padding if needed
+        padding: const EdgeInsets.symmetric(
+          vertical: 8.0,
+        ), // Minimal vertical padding for the list itself
+        itemCount: _groupedTimetableData.length,
         itemBuilder: (context, index) {
-          final item = flattenedLectures[index];
+          // Get the data for the current branch group
+          final branchGroup = _groupedTimetableData[index];
+          final String branchName = branchGroup['branchName'];
+          final List<dynamic> lectures = branchGroup['lectures'];
 
-          if (item['isDivider'] == true) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(
-                vertical: 16.0,
-                horizontal: 8.0,
-              ),
-              child: Divider(thickness: 1.5, color: Colors.grey[700]),
-            );
-          } else if (item['isHeader'] == true) {
-            // --- MODIFIED Branch Header Rendering ---
-            return Container(
-              margin: const EdgeInsets.only(top: 16.0, bottom: 8.0),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10.0,
-                vertical: 8.0,
-              ), // Adjust padding as needed
-              decoration: BoxDecoration(
-                color: Colors.blueGrey.shade800, // Main background color
-                borderRadius: BorderRadius.circular(8.0),
-              ),
-              child: Row(
-                children: [
-                  // Left Accent Chip
-                  Container(
-                    width: 5, // Adjust width for desired thickness
-                    height:
-                        24, // Adjust height to match text line height roughly
-                    decoration: BoxDecoration(
-                      color: Colors.blueAccent.shade400, // Accent color
-                      borderRadius: BorderRadius.circular(
-                        3,
-                      ), // Rounded corners for chip look
-                    ),
+          // --- Return the Outer Card for the Branch Group ---
+          return Card(
+            margin:
+                Theme.of(context).cardTheme.margin ?? // Use theme margin
+                const EdgeInsets.symmetric(
+                  vertical: 8.0,
+                  horizontal: 12.0,
+                ), // Fallback
+            clipBehavior: Clip.antiAlias, // Good practice for rounded corners
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // --- Branch Name Header ---
+                Padding(
+                  padding: const EdgeInsets.only(
+                    top: 16.0, // Space above branch name inside the card
+                    left: 16.0, // Indent branch name
+                    right: 16.0,
+                    bottom: 8.0, // Space below branch name before lecture cards
                   ),
-                  const SizedBox(
-                    width: 10,
-                  ), // Spacing between left chip and text
-                  // Branch Name - Expanded to handle wrapping/ellipsis
-                  Expanded(
-                    child: Text(
-                      item['branchName'],
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.primary,
-                        letterSpacing: 0.5,
-                      ),
-                      textAlign:
-                          TextAlign.center, // Center text between the chips
-                      softWrap: true, // Allow wrapping
-                      maxLines: 3,
-                      overflow:
-                          TextOverflow
-                              .ellipsis, // Add "..." if exceeds maxLines
+                  child: Text(
+                    branchName,
+                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600, // Make it stand out
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withOpacity(0.9),
+                      letterSpacing: 0.4,
                     ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    softWrap: true,
                   ),
-                  const SizedBox(
-                    width: 10,
-                  ), // Spacing between text and right chip
-                  // Right Accent Chip (Mirror of the left one)
-                  Container(
-                    width: 5, // Match left chip width
-                    height: 24, // Match left chip height
-                    decoration: BoxDecoration(
-                      color:
-                          Colors.blueAccent.shade400, // Match left chip color
-                      borderRadius: BorderRadius.circular(
-                        3,
-                      ), // Match left chip radius
-                    ),
-                  ),
-                ],
-              ),
-            ); // --- End Modification ---
-          } else if (item['isLecture'] == true) {
-            // Render the lecture card using the updated builder
-            return _buildLectureCard(item['data']);
-          } else {
-            return const SizedBox.shrink();
-          }
+                ),
+
+                // --- List of Lecture Cards (Inner Cards) ---
+                Column(
+                  children:
+                      lectures.map((lecture) {
+                        // Build the inner lecture card
+                        final lectureCard = _buildLectureCard(lecture);
+
+                        // Add padding around the *inner* lecture card for spacing
+                        // within the outer card. Reduce horizontal padding slightly
+                        // compared to the outer card's margin.
+                        return Padding(
+                          padding: const EdgeInsets.only(
+                            left: 8.0, // Inner horizontal padding
+                            right: 8.0,
+                            bottom: 10.0, // Space between lecture cards
+                          ),
+                          child: lectureCard,
+                        );
+                      }).toList(),
+                ),
+                // Add a little padding at the bottom of the outer card
+                const SizedBox(height: 6.0),
+              ],
+            ),
+          );
         },
       ),
     );
@@ -498,16 +453,13 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
             as Map<String, dynamic>?; // Get attendance map safely
     // Determine status based on the new structure
     final bool isMarked = attendanceData?['is_present'] ?? false;
-    final bool isManuallyMarked =
-        attendanceData?['manual'] ?? false; // Might be useful later
+    final bool isManuallyMarked = attendanceData?['manual'] ?? false;
     final bool isRegulizationRequested =
-        attendanceData?['regulization_request'] ?? false; // *** NEW FLAG ***
-    // final String? markingTime = attendanceData?['marking_time']; // Might be useful later
+        attendanceData?['regulization_request'] ?? false;
 
     final String? activeStatus =
         sessionData?['active']?.toString().toLowerCase(); // Get active status
 
-    // --- Other existing data extraction (adjust paths if needed) ---
     final String subjectName =
         lecture['subject']?['subject_map']?['subject_name'] ??
         'Unknown Subject';
@@ -515,155 +467,242 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         lecture['subject']?['subject_map']?['subject_code'] ?? '';
     final String teacherName = lecture['teacher'] ?? 'N/A';
     final String classroom = lecture['classroom']?['class_name'] ?? 'N/A';
-    final String lectureType =
-        lecture['type']?.toString().toUpperCase() ??
-        ''; // Assuming type is still top-level
+    final String lectureType = lecture['type']?.toString().toUpperCase() ?? '';
+    final String semester =
+        lecture['subject']?['semester']?['no'].toString() ?? '';
+    final String division =
+        lecture['batches']?[0]['division']?['division_name'].toString() ?? '';
+    final String batch = lecture['batches']?[0]['batch_name']?.toString() ?? '';
+    String semDivBatchDisplay = semester;
+    if (lectureType == 'THEORY') {
+      if (division.isNotEmpty) {
+        semDivBatchDisplay += '-$division';
+      }
+    } else {
+      if (batch.isNotEmpty) {
+        semDivBatchDisplay += '-$batch';
+      } else {
+        semDivBatchDisplay += '-$division';
+      }
+    }
+
+    String? sessionDate = sessionData?['day']?.toString();
+    if (sessionDate != null) {
+      try {
+        final DateTime parsedDate = DateTime.parse(sessionDate);
+        // Format date as 'MMM dd, yyyy' (Target format)
+        sessionDate = DateFormat('MMM dd, yyyy').format(parsedDate);
+      } catch (e) {
+        debugPrint("Error parsing session date: $sessionDate: $e");
+        sessionDate =
+            sessionData?['day']?.toString(); // Fallback to original string
+      }
+    }
+    Color typeChipColor = Colors.blueAccent.shade200;
+    if (lectureType == 'LAB') typeChipColor = const Color(0xFFAB47BC);
+    if (lectureType == 'TUTORIAL') typeChipColor = Colors.orange.shade700;
 
     // Button states (remain the same)
     final bool isCurrentlyMarking = _isMarkingLecture[lectureSlug] ?? false;
     final String? initiator = _markingInitiator[lectureSlug];
 
     // Return the Card structure from your original code
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 8,
-      ), // Consistent padding
-      child: Card(
-        elevation: 4,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: Colors.grey[800]!, // Subtle border color
-            width: 1.5,
-          ), // Subtle border
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          subjectName,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          softWrap: true, // Allow text to wrap to the next line
-                          maxLines: 2, // Limit to a maximum of 2 lines
-                          overflow:
-                              TextOverflow
-                                  .ellipsis, // Add "..." if text exceeds maxLines
-                        ),
-                        if (subjectCode.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            subjectCode,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[400],
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  if (isMarked || isManuallyMarked || isRegulizationRequested)
-                    _buildAttendanceStatusChip(
-                      isMarked || isManuallyMarked,
-                      isRegulizationRequested,
-                    ),
-                  // else if (activeStatus == 'post')
-                  //   _buildAttendanceStatusChip(
-                  //     isMarked || isManuallyMarked,
-                  //     isRegulizationRequested,
-                  //   ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // Detail Rows (same as before)
-              Row(
-                children: [
-                  Icon(Icons.access_time, size: 16, color: Colors.grey[400]),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${_formatTime(lecture['start_time'])} - ${_formatTime(lecture['end_time'])}',
-                    style: TextStyle(color: Colors.grey[300], fontSize: 14),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(Icons.person_outline, size: 16, color: Colors.grey[400]),
-                  const SizedBox(width: 8),
-                  Text(
-                    teacherName,
-                    style: TextStyle(color: Colors.grey[300], fontSize: 14),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Icon(
-                    Icons.location_city_outlined,
-                    size: 16,
-                    color: Colors.grey[400],
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    classroom,
-                    style: TextStyle(color: Colors.grey[300], fontSize: 14),
-                  ),
-                  if (lectureType.isNotEmpty) ...[
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.blue[900],
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        lectureType,
+    return Card(
+      elevation: 3,
+      // margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: Colors.grey.shade100, // Subtle border color
+          width: 1,
+        ), // Subtle border
+      ),
+      color: Theme.of(context).colorScheme.secondaryContainer,
+      shadowColor: Colors.grey.shade100,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // --- Top Row: Subject, Code & Status Chip ---
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // --- Left: Subject & Code ---
+                Expanded(
+                  // Allow text wrapping
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        subjectName,
                         style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 18, // Target size
+                          fontWeight: FontWeight.bold, // Target weight
+                          color:
+                              Theme.of(
+                                context,
+                              ).colorScheme.onSurface, // Use theme color
                         ),
+                        softWrap: true,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
-                ],
-              ),
-              // Action Buttons (with correct disabling and loading)
-              if (!isMarked && !isManuallyMarked) ...[
-                const SizedBox(height: 16), // Space before actions/status
-                // Determine what to show based on activeStatus
-                _buildActionOrStatusWidget(
-                  activeStatus,
-                  lecture,
-                  isCurrentlyMarking,
-                  initiator,
-                  isRegulizationRequested,
+                      if (subjectCode.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          '($subjectCode)', // Add parenthesis like target
+                          style: TextStyle(
+                            fontSize: 14, // Target size
+                            fontWeight: FontWeight.bold, // Target weight
+                            color:
+                                Theme.of(
+                                  context,
+                                ).colorScheme.onSurface, // Use theme color
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 2), // Space before chip
+                // --- Right: Status Chip ---
+                // (Keep your existing logic for showing the chip)
+                if (isMarked || isManuallyMarked || isRegulizationRequested)
+                  _buildAttendanceStatusChip(
+                    isMarked || isManuallyMarked,
+                    isRegulizationRequested,
+                  ),
               ],
+            ),
+            const SizedBox(height: 8), // Space after top row
+            // --- Type Chip ---
+            if (lectureType.isNotEmpty) ...[
+              Align(
+                // Align it left if needed
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10, // Adjust padding
+                    vertical: 4, // Adjust padding
+                  ),
+                  decoration: BoxDecoration(
+                    // Use specific color for 'Theory' from target (Orange-ish)
+                    color:
+                        lectureType == 'THEORY'
+                            ? Colors
+                                .orange
+                                .shade700 // Target orange
+                            : typeChipColor, // Keep logic for others
+                    borderRadius: BorderRadius.circular(6), // Target radius
+                  ),
+                  child: Text(
+                    lectureType, // Capitalize first letter? target shows "Theory"
+                    style: TextStyle(
+                      color: Colors.white, // Text color on chip
+                      fontSize: 11, // Adjust size
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12), // Space after type chip
             ],
-          ),
+
+            _buildDetailTextRow(label: "Teacher: ", value: teacherName),
+            const SizedBox(height: 10),
+            _buildDetailTextRow(label: "Sem: ", value: semDivBatchDisplay),
+            const SizedBox(height: 10),
+
+            // --- Classroom Info ---
+            _buildDetailIconRow(
+              icon: Icons.location_city_outlined,
+              value: classroom,
+            ),
+            const SizedBox(height: 8),
+
+            // --- Time Info ---
+            _buildDetailIconRow(
+              icon: Icons.access_time_outlined,
+              // Use updated _formatTime for HH:mm:ss
+              value:
+                  '${_formatTime(lecture['start_time'])} • ${_formatTime(lecture['end_time'])}',
+            ), // Use bullet like target
+            const SizedBox(height: 8),
+
+            // --- Date Info ---
+            _buildDetailIconRow(
+              icon: Icons.calendar_today_outlined,
+              // Use 'MMM dd, yyyy' format
+              value: sessionDate ?? 'N/A',
+            ), // sessionDate needs reformatting
+            // --- Action Buttons (Keep existing logic) ---
+            if (!isMarked && !isManuallyMarked) ...[
+              const SizedBox(height: 16),
+              _buildActionOrStatusWidget(
+                activeStatus,
+                lecture,
+                isCurrentlyMarking,
+                initiator,
+                isRegulizationRequested,
+              ),
+            ],
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildDetailTextRow({required String label, required String value}) {
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(
+          // Default style for the row
+          fontSize: 14,
+          color:
+              Colors.grey[700], // Use a suitable color from theme or hardcode
+        ),
+        children: <TextSpan>[
+          TextSpan(
+            text: label,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w400),
+          ), // Label slightly bolder
+          TextSpan(
+            text: value,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+      maxLines: 2, // Allow wrapping
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  // Helper for Icon rows like Classroom, Time, Date
+  Widget _buildDetailIconRow({required IconData icon, required String value}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: Colors.grey[600], size: 18), // Adjust size/color
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              // color: Colors.grey[700], // Use a suitable color
+            ),
+            maxLines: 1, // <<< CRUCIAL: Prevent wrapping
+            overflow: TextOverflow.ellipsis, // <<< CRUCIAL: Handle overflow
+          ),
+        ),
+      ],
     );
   }
 
@@ -679,8 +718,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         lecture['session']?['attendances']?['is_present'] ?? false;
     if (activeStatus == 'ongoing') {
       // Show the buttons if the session is ongoing
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Mark Attendance Button
           ElevatedButton(
@@ -706,8 +745,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
                       );
                     },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+              backgroundColor: Theme.of(context).colorScheme.onPrimary,
+              foregroundColor: Theme.of(context).colorScheme.primary,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -725,7 +764,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
                         valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
                       ),
                     )
-                    : const Text(
+                    : Text(
                       'Mark Attendance',
                       style: TextStyle(
                         fontSize: 14,
@@ -733,6 +772,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
                       ),
                     ),
           ),
+          const SizedBox(height: 8.0),
           // Manual Marking Button
           ElevatedButton(
             onPressed:
@@ -741,7 +781,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
                     : () => _showManualMarkingDialog(lecture),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blue[800],
-              foregroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -757,11 +797,11 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
                         valueColor: AlwaysStoppedAnimation<Color>(
-                          Theme.of(context).colorScheme.primary,
+                          Theme.of(context).colorScheme.onPrimary,
                         ),
                       ),
                     )
-                    : const Text(
+                    : Text(
                       'Manual Marking',
                       style: TextStyle(
                         fontSize: 14,
@@ -787,7 +827,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
     if (isPresent) {
       // If marked present, that's the final status, regardless of requests.
       statusText = 'Present';
-      chipColor = Colors.green.shade700; // Consistent green
+      chipColor = Color(0xFF4CB151); // Consistent green
     } else {
       // If not present, check if a request is pending.
       if (isRegulizationRequested) {
@@ -809,7 +849,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       ), // Adjusted padding slightly
       decoration: BoxDecoration(
         color: chipColor,
-        borderRadius: BorderRadius.circular(15), // Adjusted radius slightly
+        borderRadius: BorderRadius.circular(8), // Adjusted radius slightly
       ),
       child: Row(
         // Optional: Add an icon for clarity
@@ -837,7 +877,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
           Text(
             statusText,
             style: TextStyle(
-              color: Theme.of(context).colorScheme.primary,
+              color: Theme.of(context).colorScheme.onPrimary,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -849,39 +889,70 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
 
   // --- Helper: Error State Widget ---
   Widget _buildErrorState() {
+    // Use theme colors
+    final Color errorColor =
+        Theme.of(context).colorScheme.error; // Standard error color
+    final Color primaryTextColor =
+        Theme.of(context).colorScheme.onSurface; // Main text color
+    final Color secondaryTextColor = primaryTextColor.withOpacity(
+      0.7,
+    ); // Muted text color
+
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(20.0),
+        // Increased padding for more breathing room
+        padding: const EdgeInsets.symmetric(horizontal: 30.0, vertical: 20.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 48, color: Colors.red[400]),
-            const SizedBox(height: 16),
+            // Icon using theme's error color
+            Icon(
+              Icons
+                  .cloud_off_outlined, // A slightly different icon, feels more connection-related
+              size: 56, // Slightly larger icon
+              color: errorColor.withOpacity(
+                0.8,
+              ), // Use error color with slight transparency
+            ),
+            const SizedBox(height: 24), // Increased spacing
+            // Title Text using theme style
             Text(
-              _fetchErrorMessage ?? "An error occurred",
+              'Oops!', // Clearer title
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Colors.grey[400], // Lighter grey for message body
-                height: 1.4, // Improve line spacing for readability
+              // Use a prominent theme text style
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: primaryTextColor,
+                fontWeight: FontWeight.w600, // Adjust weight as needed
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 12), // Spacing between title and message
+            // Message Text using theme style and muted color
+            Text(
+              _fetchErrorMessage ??
+                  "Something went wrong. Please try again.", // Default message
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: secondaryTextColor, // Muted color
+                height: 1.5, // Improved line spacing
+              ),
+            ),
+            const SizedBox(height: 32), // Increased spacing before button
+            // Button using theme's ElevatedButton style (or customize minimally)
             ElevatedButton.icon(
               onPressed: _initializeAndFetchData, // Retry full init
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.refresh_rounded, size: 20), // Refined icon
               label: const Text('Retry'),
+              // Let the button style primarily come from ElevatedButtonThemeData
+              // Only override specific things if necessary
               style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
+                  horizontal: 32, // More horizontal padding
+                  vertical: 14, // More vertical padding
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(
-                    10,
-                  ), // Consistent rounding
-                ),
+                // Example: Ensure text style uses theme if not default
+                // textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                //   fontWeight: FontWeight.w600
+                // ),
               ),
             ),
           ],
@@ -890,34 +961,91 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
     );
   }
 
-  // --- Helper: Empty State Widget ---
+  // --- Helper: Empty State Widget (Modernized) ---
   Widget _buildEmptyState() {
+    // Use theme colors
+    final Color primaryTextColor = Theme.of(context).colorScheme.onSurface;
+    final Color secondaryTextColor = primaryTextColor.withOpacity(0.6);
+    // Use a neutral theme color for the icon, e.g., secondary or a grey derived from surface
+    final Color iconColor =
+        Theme.of(
+          context,
+        ).colorScheme.secondary; // Or onSurface.withOpacity(0.4)
+
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.event_busy, size: 48, color: Colors.grey[600]),
-          const SizedBox(height: 16),
-          Text(
-            'No lectures scheduled for today',
-            style: TextStyle(
-              fontSize: 18,
-              color: Colors.grey[400],
-              fontWeight: FontWeight.w500,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 30.0, vertical: 20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Icon using a neutral theme color
+            Icon(
+              Icons.event_note_outlined, // Icon suggesting an empty schedule
+              size: 56,
+              color: iconColor,
             ),
-          ),
-          const SizedBox(height: 24),
+            const SizedBox(height: 24),
+
+            // Title Text
+            Text(
+              'No Lectures Today',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: primaryTextColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Subtitle Text (Optional, adds context)
+            Text(
+              'Your schedule is clear. Enjoy your day!',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: secondaryTextColor,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 32),
+
+            // Button - Consider OutlinedButton for less emphasis than error retry
+            OutlinedButton.icon(
+              onPressed: () => _fetchTimetableData(showLoading: true),
+              icon: const Icon(Icons.refresh_rounded, size: 20),
+              label: const Text('Check Again'),
+              // Let the style come from OutlinedButtonThemeData or customize
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 14,
+                ),
+                // Ensure foreground color uses theme (important for outlined buttons)
+                foregroundColor: Theme.of(context).colorScheme.primary,
+                side: BorderSide(
+                  // Define border color explicitly if needed
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                ),
+                // textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                //   fontWeight: FontWeight.w600
+                // ),
+              ),
+            ),
+            // --- OR --- Keep ElevatedButton if you prefer consistency
+            /*
           ElevatedButton.icon(
             onPressed: () => _fetchTimetableData(showLoading: true),
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded, size: 20),
             label: const Text('Check Again'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+              // Maybe use less prominent colors? e.g., grey or secondary
+              // backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+              // foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
             ),
           ),
-        ],
+          */
+          ],
+        ),
       ),
     );
   }

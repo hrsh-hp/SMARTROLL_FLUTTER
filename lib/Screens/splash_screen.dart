@@ -187,7 +187,7 @@ class _SplashScreenState extends State<SplashScreen>
   Widget build(BuildContext context) {
     // UI remains the same
     return Scaffold(
-      backgroundColor: const Color(0xFF000000),
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: Center(
         child: ShimmerWidget(
           // Assuming ShimmerWidget is correctly defined
