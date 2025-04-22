@@ -37,7 +37,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   // --- State Variables (Original Names) ---
   bool _isLoadingTimetable = true;
   String? _fetchErrorMessage;
-  List<dynamic> _timetableData = [];
+  // List<dynamic> _timetableData = [];
   String? _deviceId;
   String? _accessToken;
 
@@ -63,7 +63,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   Future<void> _loadAccessToken() async {
     // Use actual storage read
     _accessToken = await secureStorage.read(key: 'accessToken');
-    debugPrint("Access token loaded: ${_accessToken != null}");
+    //debugprint("Access token loaded: ${_accessToken != null}");
   }
 
   // --- Initialization and Data Fetching (Unchanged from previous safe version) ---
@@ -93,9 +93,9 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   Future<void> _getAndStoreDeviceId() async {
     try {
       _deviceId = await deviceIdService.getUniqueDeviceId();
-      debugPrint("Device ID: $_deviceId");
+      //debugprint("Device ID: $_deviceId");
     } catch (e) {
-      debugPrint("Error getting device ID: $e");
+      //debugprint("Error getting device ID: $e");
     }
   }
 
@@ -272,7 +272,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       setState(() {
         _fetchErrorMessage = message;
         _isLoadingTimetable = false;
-        _timetableData = [];
+        // _timetableData = [];
       });
     }
   }
@@ -313,7 +313,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       final parsedTime = DateFormat("HH:mm:ss").parse(timeString);
       return DateFormat("h:mm a").format(parsedTime);
     } catch (e) {
-      debugPrint("Error formatting time '$timeString': $e");
+      //debugprint("Error formatting time '$timeString': $e");
       return timeString;
     }
   }
@@ -400,9 +400,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
                     style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                       fontSize: 16,
                       fontWeight: FontWeight.w600, // Make it stand out
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withOpacity(0.9),
+                      color:
+                          Theme.of(context).colorScheme.onSurface.withValues(),
                       letterSpacing: 0.4,
                     ),
                     maxLines: 3,
@@ -493,7 +492,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         // Format date as 'MMM dd, yyyy' (Target format)
         sessionDate = DateFormat('MMM dd, yyyy').format(parsedDate);
       } catch (e) {
-        debugPrint("Error parsing session date: $sessionDate: $e");
+        //debugprint("Error parsing session date: $sessionDate: $e");
         sessionDate =
             sessionData?['day']?.toString(); // Fallback to original string
       }
@@ -538,28 +537,22 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
                       Text(
                         subjectName,
                         style: TextStyle(
-                          fontSize: 18, // Target size
-                          fontWeight: FontWeight.bold, // Target weight
-                          color:
-                              Theme.of(
-                                context,
-                              ).colorScheme.onSurface, // Use theme color
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                         softWrap: true,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
+                        // maxLines: 3,
+                        // overflow: TextOverflow.ellipsis,
                       ),
                       if (subjectCode.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
-                          '($subjectCode)', // Add parenthesis like target
+                          '($subjectCode)',
                           style: TextStyle(
-                            fontSize: 14, // Target size
-                            fontWeight: FontWeight.bold, // Target weight
-                            color:
-                                Theme.of(
-                                  context,
-                                ).colorScheme.onSurface, // Use theme color
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                       ],
@@ -745,8 +738,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
                       );
                     },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.onPrimary,
-              foregroundColor: Theme.of(context).colorScheme.primary,
+              backgroundColor: Colors.blueAccent[700],
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -780,8 +773,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
                     ? null
                     : () => _showManualMarkingDialog(lecture),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue[800],
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+              backgroundColor: Theme.of(context).colorScheme.onPrimary,
+              foregroundColor: Theme.of(context).colorScheme.primary,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -894,9 +887,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         Theme.of(context).colorScheme.error; // Standard error color
     final Color primaryTextColor =
         Theme.of(context).colorScheme.onSurface; // Main text color
-    final Color secondaryTextColor = primaryTextColor.withOpacity(
-      0.7,
-    ); // Muted text color
+    final Color secondaryTextColor =
+        primaryTextColor.withValues(); // Muted text color
 
     return Center(
       child: Padding(
@@ -910,9 +902,9 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
               Icons
                   .cloud_off_outlined, // A slightly different icon, feels more connection-related
               size: 56, // Slightly larger icon
-              color: errorColor.withOpacity(
-                0.8,
-              ), // Use error color with slight transparency
+              color:
+                  errorColor
+                      .withValues(), // Use error color with slight transparency
             ),
             const SizedBox(height: 24), // Increased spacing
             // Title Text using theme style
@@ -965,7 +957,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   Widget _buildEmptyState() {
     // Use theme colors
     final Color primaryTextColor = Theme.of(context).colorScheme.onSurface;
-    final Color secondaryTextColor = primaryTextColor.withOpacity(0.6);
+    final Color secondaryTextColor = primaryTextColor.withValues();
     // Use a neutral theme color for the icon, e.g., secondary or a grey derived from surface
     final Color iconColor =
         Theme.of(
@@ -1023,7 +1015,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
                 foregroundColor: Theme.of(context).colorScheme.primary,
                 side: BorderSide(
                   // Define border color explicitly if needed
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                  color: Theme.of(context).colorScheme.primary.withValues(),
                 ),
                 // textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
                 //   fontWeight: FontWeight.w600

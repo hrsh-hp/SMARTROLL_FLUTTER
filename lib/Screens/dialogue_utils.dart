@@ -16,8 +16,9 @@ class DialogUtils {
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
     IconData iconData = Icons.settings_outlined;
-    if (settingsType == AppSettingsType.location)
+    if (settingsType == AppSettingsType.location) {
       iconData = Icons.location_on_outlined;
+    }
     // ... (add other icon logic if needed) ...
 
     await showModalBottomSheet<void>(
@@ -92,7 +93,7 @@ class DialogUtils {
                         AppSettings.openAppSettings(
                           type: settingsType,
                         ).catchError((error) {
-                          debugPrint("Error opening settings: $error");
+                          //debugprint("Error opening settings: $error");
                           onErrorSnackbar?.call(
                             "Could not open settings automatically.",
                             isError: true,
@@ -256,7 +257,7 @@ class _ManualMarkingDialogContentState
                   ), // Use primary color
                 ),
                 errorStyle: TextStyle(
-                  color: Theme.of(context).colorScheme.error.withOpacity(0.8),
+                  color: Theme.of(context).colorScheme.error.withValues(),
                 ), // Error style
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -298,10 +299,10 @@ class _ManualMarkingDialogContentState
                     disabledBackgroundColor: Theme.of(context)
                         .colorScheme
                         .primary
-                        .withOpacity(0.5), // Style for disabled
+                        .withValues(), // Style for disabled
                     disabledForegroundColor: Theme.of(
                       context,
-                    ).colorScheme.onPrimary.withOpacity(0.7),
+                    ).colorScheme.onPrimary.withValues(),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ), // Consistent shape

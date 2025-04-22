@@ -1,6 +1,5 @@
-import 'dart:math';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/material.dart';
+// import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:io';
 import 'package:flutter/services.dart';
@@ -13,24 +12,10 @@ const String backendBaseUrl = "https://smartroll.live";
 /// A shared instance of FlutterSecureStorage for the entire application.
 final FlutterSecureStorage secureStorage = const FlutterSecureStorage();
 
-// Note: Device ID cannot be a constant here as it's fetched asynchronously at runtime.
-// Fetch it where needed (e.g., in the initState of relevant screens) and store it in local state.
-
-String generateShortId({int length = 10}) {
-  const chars =
-      'abcdefghijklmnopqrstuvwxyz'
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-      '0123456789'
-      '!@#\$%^&*()-_=+[]{}|;:,.<>?';
-
-  final rand = Random.secure();
-  return List.generate(length, (_) => chars[rand.nextInt(chars.length)]).join();
-}
-
 class SecurityService {
   // Define the channel name (must match native side)
   static const _platformChannel = MethodChannel(
-    'com.smartroll.checks/dev_mode',
+    'com.smartroll.app.checks/dev_mode',
   );
 
   /// Checks if the device is rooted (Android) or jailbroken (iOS).
@@ -38,7 +23,7 @@ class SecurityService {
     try {
       return await Rjsniffer.amICompromised() ?? false;
     } catch (e) {
-      debugPrint("Error checking compromised status: $e");
+      //debugprint("Error checking compromised status: $e");
       return false; // Assume not compromised if check fails
     }
   }
@@ -47,7 +32,7 @@ class SecurityService {
     try {
       return await Rjsniffer.amIDebugged() ?? false;
     } catch (e) {
-      debugPrint("Error checking compromised status: $e");
+      //debugprint("Error checking compromised status: $e");
       return false; // Assume not compromised if check fails
     }
   }
@@ -65,11 +50,11 @@ class SecurityService {
         'isDeveloperModeEnabled',
       );
       return isDevMode;
-    } on PlatformException catch (e) {
-      debugPrint("Failed to check developer mode: '${e.message}'.");
+    } on PlatformException {
+      //debugprint("Failed to check developer mode: '${e.message}'.");
       return false; // Assume disabled if check fails
     } catch (e) {
-      debugPrint("Unexpected error checking developer mode: $e");
+      //debugprint("Unexpected error checking developer mode: $e");
       return false;
     }
   }
@@ -92,13 +77,11 @@ class NetwrokUtils {
     try {
       // Check connectivity status
       final connectivityResultList = await Connectivity().checkConnectivity();
-      debugPrint("Connectivity Check Result: $connectivityResultList");
+      //debugprint("Connectivity Check Result: $connectivityResultList");
       if (connectivityResultList.contains(ConnectivityResult.none) &&
           connectivityResultList.length > 1) {
         // This state is unusual, treat as disconnected for safety? Or log a warning.
-        debugPrint(
-          "Warning: Connectivity list contains 'none' along with other types.",
-        );
+        //debugprint( "Warning: Connectivity list contains 'none' along with other types.",);
         // Optionally filter out 'none' if other valid connections exist.
         // return connectivityResultList.where((r) => r != ConnectivityResult.none).toList();
       }
@@ -106,7 +89,7 @@ class NetwrokUtils {
       return connectivityResultList;
     } catch (e) {
       // Handle potential errors during the check itself (rare)
-      debugPrint("Error checking connectivity: $e");
+      //debugprint("Error checking connectivity: $e");
       // Return 'none' or throw an exception depending on how you want callers to handle this failure
       return [];
     }
@@ -133,4 +116,3 @@ class NetwrokUtils {
     // Add ConnectivityResult.other based on future package updates if needed.
   }
 }
-

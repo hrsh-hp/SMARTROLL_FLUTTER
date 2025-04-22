@@ -1,5 +1,3 @@
-// This is a simple animation controller for the shimmer effect.
-// --- Define the Gradient Transform ---
 import 'package:flutter/material.dart';
 
 class _SlideGradientTransform extends GradientTransform {
@@ -32,7 +30,7 @@ class ShimmerWidget extends StatefulWidget {
 
   const ShimmerWidget({
     required this.child,
-    this.baseColor = const Color(0xFF000000),
+    this.baseColor = Colors.black,
     this.highlightColor = const Color(0xFFDEDEDE), // Slightly lighter highlight
     this.duration = const Duration(milliseconds: 1000),
     this.gradientPatternWidth = 0.5, // Default width of the moving band
@@ -74,7 +72,7 @@ class _ShimmerWidgetState extends State<ShimmerWidget>
           return const SizedBox.shrink();
         }
         return ShaderMask(
-          blendMode: BlendMode.srcIn, // Apply gradient color to child's shape
+          blendMode: BlendMode.srcATop, // Apply gradient color to child's shape
           shaderCallback: (Rect bounds) {
             return LinearGradient(
               // Use colors from widget properties

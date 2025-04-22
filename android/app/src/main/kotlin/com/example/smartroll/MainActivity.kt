@@ -1,4 +1,4 @@
-package com.example.smartroll
+package com.smartroll.app
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -6,7 +6,7 @@ import io.flutter.plugin.common.MethodChannel
 import android.provider.Settings 
 
 class MainActivity : FlutterActivity(){
-    private val DEV_MODE_CHANNEL = "com.smartroll.checks/dev_mode" // Must match Dart side
+    private val DEV_MODE_CHANNEL = "com.smartroll.app.checks/dev_mode" // Must match Dart side
 
      override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
          super.configureFlutterEngine(flutterEngine)

@@ -1,12 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http; // For MediaType
 import 'package:location/location.dart'; // Keep for LocationData type
-import 'package:app_settings/app_settings.dart'; // Keep for AppSettingsType
-import 'package:path_provider/path_provider.dart';
+import 'package:app_settings/app_settings.dart';
 import 'package:smartroll/Screens/dialogue_utils.dart';
 import 'package:smartroll/Screens/login_screen.dart';
 
@@ -78,11 +76,11 @@ class MarkAttendaceService {
       devModeEnabledNow = checksresults['isDeveloperModeEnabled'] ?? false;
       debuggerAttachedNow = checksresults['isDebuggerAttached'] ?? false;
     } catch (e) {
-      debugPrint("Error re-checking dev mode and debugger: $e");
+      //debugprint("Error re-checking dev mode and debugger: $e");
     }
 
     if (devModeEnabledNow || debuggerAttachedNow) {
-      debugPrint("Security check failed at time of marking. Aborting.");
+      //debugprint("Security check failed at time of marking. Aborting.");
       handleCriticalError(
         "Attendance marking disabled while ${devModeEnabledNow ? "Developer Options are active." : "Debugger is Attached."}",
       );
@@ -141,7 +139,7 @@ class MarkAttendaceService {
     AttendanceDataResult? dataResult;
     if (initiator == 'auto') {
       showSnackbar(
-        "Collecting surrounding data please do not close the app...",
+        "Marking Attendance please do not close the app...",
         isError: false,
         duration: const Duration(seconds: 8),
       );
@@ -149,7 +147,7 @@ class MarkAttendaceService {
         recordingDuration: const Duration(seconds: 5),
       );
       // Hide immediately after await returns, before processing result
-      if (context.mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      // if (context.mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
       if (!context.mounted) {
         resetMarkingState(lectureSlug);
@@ -248,6 +246,7 @@ class MarkAttendaceService {
       return;
     }
 
+    if (!context.mounted) return;
     // Call the internal API request helper
     await _makeApiRequestWithRetryInternal(
       // Pass necessary callbacks and data
@@ -380,7 +379,7 @@ class MarkAttendaceService {
     try {
       // --- Initial Attempt ---
       http.BaseRequest request = buildRequest(currentToken);
-      debugPrint("Attempting API Request (Initial)");
+      //debugprint("Attempting API Request (Initial)");
       http.StreamedResponse streamedResponse = await (request
                   is http.MultipartRequest
               ? request.send()
@@ -396,16 +395,16 @@ class MarkAttendaceService {
       final int statusCode = response.statusCode;
       final String responseBody = response.body;
 
-      debugPrint("API Response Status (Initial): $statusCode");
+      //debugprint("API Response Status (Initial): $statusCode");
       // Avoid printing large bodies in production logs
-      // debugPrint("API Response Body (Initial): $responseBody");
+      // //debugprint("API Response Body (Initial): $responseBody");
 
       // --- Handle Response ---
       if (statusCode == 200 || statusCode == 201) {
         await processSuccessResponse(responseBody); // Process success
       } else if (statusCode == 401 || statusCode == 403) {
         // --- Handle Auth Error & Retry ---
-        debugPrint("Received 401/403. Attempting token refresh...");
+        //debugprint("Received 401/403. Attempting token refresh...");
         showSnackbar(
           "Session may have expired. Refreshing...",
           isError: false,
@@ -414,7 +413,7 @@ class MarkAttendaceService {
         final refreshResult = await authService.attemptTokenRefresh();
 
         if (refreshResult == RefreshStatus.success) {
-          debugPrint("Refresh successful. Retrying original request...");
+          //debugprint("Refresh successful. Retrying original request...");
           // Reload token via callback - This updates the token in the SCREEN'S state
           await loadAccessToken();
           String? newAccessToken =
@@ -433,7 +432,7 @@ class MarkAttendaceService {
 
           // Build retry request with NEW token
           http.BaseRequest retryRequest = buildRequest(currentToken);
-          debugPrint("Attempting API Request (Retry)");
+          //debugprint("Attempting API Request (Retry)");
 
           // Send Retry Request
           http.StreamedResponse retryStreamedResponse = await (retryRequest
@@ -451,8 +450,8 @@ class MarkAttendaceService {
           int retryStatusCode = retryResponse.statusCode;
           String retryResponseBody = retryResponse.body;
 
-          debugPrint("API Response Status (Retry): $retryStatusCode");
-          // debugPrint("API Response Body (Retry): $retryResponseBody");
+          //debugprint("API Response Status (Retry): $retryStatusCode");
+          // //debugprint("API Response Body (Retry): $retryResponseBody");
 
           // Handle Retry Response
           if (retryStatusCode == 200 || retryStatusCode == 201) {
@@ -466,7 +465,7 @@ class MarkAttendaceService {
             } catch (_) {}
             // Decide if we should logout here or just show error
             if (retryStatusCode == 401 || retryStatusCode == 403) {
-              debugPrint("Retry failed with 401/403. Logging out.");
+              //debugprint("Retry failed with 401/403. Logging out.");
               await authService.clearTokens();
               if (context.mounted) {
                 Navigator.pushAndRemoveUntil(
@@ -489,7 +488,7 @@ class MarkAttendaceService {
           }
         } else {
           // Refresh failed, logout
-          debugPrint("Refresh failed. Logging out.");
+          //debugprint("Refresh failed. Logging out.");
           await authService.clearTokens();
           if (context.mounted) {
             Navigator.pushAndRemoveUntil(
@@ -516,7 +515,7 @@ class MarkAttendaceService {
       }
     } catch (e) {
       // Catch all errors from API call, refresh, or retry
-      debugPrint('API Request/Retry Error: ${e.toString()}');
+      //debugprint('API Request/Retry Error: ${e.toString()}');
       showSnackbar(
         e is Exception
             ? e.toString().replaceFirst('Exception: ', '')

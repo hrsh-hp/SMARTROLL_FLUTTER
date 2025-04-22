@@ -49,14 +49,14 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    debugPrint("LoginScreen Lifecycle State: $state"); // For debugging
+    //debugprint("LoginScreen Lifecycle State: $state"); // For debugging
 
     // Check if the app resumed (came back from the browser)
     if (state == AppLifecycleState.resumed && _isRedirecting) {
       // User has likely returned from the browser..
       // The success/failure now depends on the actual callback processing.
       _abandonmentTimer?.cancel();
-      debugPrint("App resumed, cancelling abandonment timer.");
+      //debugprint("App resumed, cancelling abandonment timer.");
       // We can optionally set _isRedirecting false here, but it might not be necessary
       // for now, as the timer is cancelled. If the deep link handler fails,
       setState(() {
@@ -67,9 +67,7 @@ class _LoginScreenState extends State<LoginScreen>
       Future.delayed(const Duration(milliseconds: 300), () {
         // Check if we are still on this screen and redirecting state was active
         if (mounted && _isRedirecting) {
-          debugPrint(
-            "App resumed, but still on LoginScreen. Assuming manual return or failed callback.",
-          );
+          //debugprint( "App resumed, but still on LoginScreen. Assuming manual return or failed callback.", );
           // Reset the state to show retry.
           _handleRedirectFailure(
             message: 'Login process interrupted. Please try again.',
@@ -113,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen>
         _abandonmentTimer = Timer(const Duration(seconds: 90), () {
           //// 90 seconds timeout This timer only fires if the app lifecycle listener didn't cancel it AND this screen is still mounted.
           if (mounted && _isRedirecting) {
-            debugPrint("Abandonment timer fired.");
+            //debugprint("Abandonment timer fired.");
             _handleRedirectFailure(
               message: 'Login timed out. Please try again.',
             );
@@ -121,14 +119,14 @@ class _LoginScreenState extends State<LoginScreen>
         });
       } else if (mounted) {
         // Handle immediate launch failure
-        debugPrint("launchUrl returned false.");
+        //debugprint("launchUrl returned false.");
         _handleRedirectFailure(
           message:
               'Could not open the login page. Please ensure you have a web browser installed.',
         );
       }
     } catch (e) {
-      debugPrint("Error during login initiation: $e");
+      //debugprint("Error during login initiation: $e");
       if (mounted) {
         _handleRedirectFailure(
           message: 'An error occurred while trying to log in: ${e.toString()}',

@@ -39,22 +39,22 @@ class _MyAppState extends State<MyApp> {
     try {
       final initialUri = await _appLinks.getInitialLink();
       if (initialUri != null) {
-        debugPrint('Initial link received: $initialUri');
+        //debugprint('Initial link received: $initialUri');
         await _processLink(initialUri);
       } else {
-        debugPrint('No initial link found.');
+        //debugprint('No initial link found.');
       }
     } catch (e) {
-      debugPrint('Error getting initial link: $e');
+      //debugprint('Error getting initial link: $e');
     }
 
     _linkSubscription = _appLinks.uriLinkStream.listen(
       (uri) {
-        debugPrint('Link received while running: $uri');
+        //debugprint('Link received while running: $uri');
         _processLink(uri);
       },
       onError: (err) {
-        debugPrint('Error listening to link stream: $err');
+        //debugprint('Error listening to link stream: $err');
       },
     );
   }
@@ -71,7 +71,7 @@ class _MyAppState extends State<MyApp> {
         try {
           await _storage.write(key: 'accessToken', value: accessToken);
           await _storage.write(key: 'refreshToken', value: refreshToken);
-          debugPrint("Tokens stored successfully via deep link!");
+          //debugprint("Tokens stored successfully via deep link!");
 
           // Use the navigator key to push a fresh instance of SplashScreen
           _navigatorKey.currentState?.pushAndRemoveUntil(
@@ -79,13 +79,13 @@ class _MyAppState extends State<MyApp> {
             (route) => false,
           );
         } catch (e) {
-          debugPrint("Failed to store tokens from link: $e");
+          //debugprint("Failed to store tokens from link: $e");
         }
       } else {
-        debugPrint("Auth callback received but tokens are missing/empty: $uri");
+        //debugprint("Auth callback received but tokens are missing/empty: $uri");
       }
     } else {
-      debugPrint("Received link is not the expected auth callback: $uri");
+      //debugprint("Received link is not the expected auth callback: $uri");
     }
   }
 
