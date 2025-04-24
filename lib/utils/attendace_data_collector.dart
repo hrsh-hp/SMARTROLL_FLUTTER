@@ -168,10 +168,24 @@ class AttendanceDataCollector {
     //debugprint("Location services OK. Getting location...");
     try {
       await _location.changeSettings(accuracy: LocationAccuracy.high);
-      final locationData = await _location.getLocation().timeout(
-        const Duration(seconds: 25),
-        onTimeout: () => throw TimeoutException('Getting location timed out'),
-      );
+      LocationData? locationData;
+      try {
+        locationData = await _location.getLocation().timeout(
+          const Duration(seconds: 15),
+          onTimeout:
+              () =>
+                  throw TimeoutException('Getting accurate location timed out'),
+        );
+      } on TimeoutException catch (e) {
+        await _location.changeSettings(accuracy: LocationAccuracy.balanced);
+
+        locationData = await _location.getLocation().timeout(
+          const Duration(seconds: 20),
+          onTimeout:
+              () =>
+                  throw TimeoutException('Getting balanced location timed out'),
+        );
+      }
 
       // --- Mock Location Check ---
       if (locationData.isMock == true) {

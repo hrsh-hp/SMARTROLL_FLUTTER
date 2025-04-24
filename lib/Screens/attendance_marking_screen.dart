@@ -230,8 +230,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       // Call the static method
       context: context,
       subjectName:
-          lecture['subject']?['subject_map']?['subject_name'] ??
-          'Unknown Subject',
+          "${lecture['subject']?['subject_map']?['subject_name']} (${lecture['type']})",
       onSubmit: (String reason) {
         // Callback triggers the service call
         _attendanceHandlerService.handleAttendance(
@@ -738,7 +737,6 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
                       );
                     },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blueAccent[700],
               foregroundColor: Theme.of(context).colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               shape: RoundedRectangleBorder(
@@ -749,12 +747,14 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
             ),
             child:
                 isCurrentlyMarking && initiator == 'auto'
-                    ? const SizedBox(
+                    ? SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Theme.of(context).colorScheme.onPrimary,
+                        ),
                       ),
                     )
                     : Text(

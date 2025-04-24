@@ -147,7 +147,7 @@ class MarkAttendaceService {
         recordingDuration: const Duration(seconds: 5),
       );
       // Hide immediately after await returns, before processing result
-      // if (context.mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      if (context.mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
       if (!context.mounted) {
         resetMarkingState(lectureSlug);

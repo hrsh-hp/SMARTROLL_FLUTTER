@@ -162,8 +162,10 @@ class _MyAppState extends State<MyApp> {
               borderRadius: BorderRadius.circular(8),
             ),
             // Consider adding default text/background colors if needed
-            // backgroundColor: Colors.blue, // Example
+            backgroundColor: Colors.blueAccent[400],
             // foregroundColor: Colors.white, // Example
+            disabledBackgroundColor: Colors.grey.shade400,
+            disabledForegroundColor: Colors.grey.shade700,
           ),
         ),
         iconTheme: IconThemeData(

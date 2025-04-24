@@ -59,15 +59,15 @@ class _LoginScreenState extends State<LoginScreen>
       //debugprint("App resumed, cancelling abandonment timer.");
       // We can optionally set _isRedirecting false here, but it might not be necessary
       // for now, as the timer is cancelled. If the deep link handler fails,
-      setState(() {
-        _isRedirecting = false;
-      }); // Optional
+      // setState(() {
+      //   _isRedirecting = false;
+      // }); // Optional
       // If the app resumes and lands back on THIS screen, it means the deep link handler (elsewhere) either hasn't run yet OR failed OR the user came back manually. Treat this return as needing a retry.
       // A short delay helps avoid race conditions if the deep link handler is *just* about to navigate.
       Future.delayed(const Duration(milliseconds: 300), () {
         // Check if we are still on this screen and redirecting state was active
         if (mounted && _isRedirecting) {
-          //debugprint( "App resumed, but still on LoginScreen. Assuming manual return or failed callback.", );
+          // debugprint( "App resumed, but still on LoginScreen. Assuming manual return or failed callback.", );
           // Reset the state to show retry.
           _handleRedirectFailure(
             message: 'Login process interrupted. Please try again.',
@@ -157,41 +157,84 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context); // Get theme for colors
+
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ShimmerWidget(
-              child: Image.asset(
-                'assets/LOGO.webp',
-                width: MediaQuery.of(context).size.width * 0.5,
-              ),
-              // const Text(
-              //   'SMARTROLL',
-              //   textAlign: TextAlign.center,
-              //   style: TextStyle(
-              //     fontSize: 35, // Slightly larger maybe?
-              //     fontWeight: FontWeight.bold,
-              //     // The color here doesn't strictly matter as ShaderMask overrides it,
-              //     // but setting it helps visualize the text bounds.
-              //     color: Colors.white,
-              //     letterSpacing: 5,
-              //   ),
-              // ),
+      backgroundColor: theme.colorScheme.surface,
+      body: Stack(
+        alignment: Alignment.center,
+        children: [
+          Center(
+            // Explicitly center the logo column
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ShimmerWidget(
+                  child: Image.asset(
+                    'assets/LOGO.webp',
+                    width: MediaQuery.of(context).size.width * 0.5,
+                  ),
+                ),
+                // Optional: Add space below logo if needed even when button isn't shown
+                // const SizedBox(height: 60), // Adjust as needed
+              ],
             ),
-            if (_showRetry) ...[
-              const SizedBox(height: 24),
-              TextButton.icon(
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Retry'),
-                onPressed: _initiateLogin,
-                style: TextButton.styleFrom(foregroundColor: Colors.white70),
+          ),
+
+          // --- Retry Button (Positioned at Bottom Center, conditionally visible) ---
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              // Add padding from the bottom edge
+              padding: const EdgeInsets.only(
+                bottom: 100.0,
+              ), // Adjust bottom padding as needed
+              child: AnimatedOpacity(
+                // Use AnimatedOpacity for smooth appearance
+                opacity: _showRetry ? 1.0 : 0.0, // Control visibility
+                duration: const Duration(milliseconds: 300), // Fade duration
+                child:
+                    _showRetry // Only build the button if _showRetry is true
+                        ? ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: theme.colorScheme.surface,
+                            foregroundColor: theme.colorScheme.primary,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            textStyle: theme.textTheme.labelLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          icon: const Icon(Icons.refresh_rounded, size: 20),
+                          label: const Text('Retry Login'),
+                          onPressed:
+                              _initiateLogin, // Call the login initiation again
+                        )
+                        : const SizedBox.shrink(), // Render nothing if not showing retry
               ),
-            ],
-          ],
-        ),
+            ),
+          ),
+
+          // --- Optional: Redirecting Indicator (Could also be positioned) ---
+          if (_isRedirecting)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.only(
+                  bottom: 70.0,
+                ), // Position slightly above button area
+                child: Text(
+                  'Redirecting to login...',
+                  style: TextStyle(color: Colors.grey[500]),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -3,7 +3,7 @@ import 'package:app_settings/app_settings.dart';
 
 /// Utility class for showing common dialogs and bottom sheets.
 class DialogUtils {
-  // --- Permission Settings Bottom Sheet (Stateless) ---
+  // --- Permission Settings Bottom Sheet (Stateless & Light Theme) ---
   static Future<void> showPermissionSettingsSheet({
     required BuildContext context,
     required String title,
@@ -11,13 +11,15 @@ class DialogUtils {
     required AppSettingsType settingsType,
     Function(String message, {bool isError})? onErrorSnackbar,
   }) async {
-    // --- Keep the implementation from the previous step ---
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final textTheme = theme.textTheme;
+    final theme = Theme.of(context); // Get theme
+    final colorScheme = theme.colorScheme; // Get color scheme
+    final textTheme = theme.textTheme; // Get text theme
+
     IconData iconData = Icons.settings_outlined;
+    Color iconColor = colorScheme.secondary; // Use secondary color for icon
     if (settingsType == AppSettingsType.location) {
       iconData = Icons.location_on_outlined;
+      iconColor = colorScheme.primary; // Use primary for location maybe?
     }
     // ... (add other icon logic if needed) ...
 
@@ -25,36 +27,50 @@ class DialogUtils {
       context: context,
       isDismissible: false,
       enableDrag: false,
-      backgroundColor: Colors.transparent,
+      // Use theme's bottom sheet background color
+      backgroundColor:
+          theme.bottomSheetTheme.backgroundColor ?? colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        // Consistent shape
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20.0)),
+      ),
       builder: (BuildContext sheetContext) {
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-          decoration: BoxDecoration(
-            color: Colors.grey[900],
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(20.0),
-            ),
+        // Container is mainly for padding now
+        return Padding(
+          padding: const EdgeInsets.only(
+            left: 24.0,
+            right: 24.0,
+            top: 28.0,
+            bottom: 20.0,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
-              Icon(iconData, color: colorScheme.onPrimary, size: 48),
+              Icon(
+                iconData,
+                color: iconColor,
+                size: 48,
+              ), // Use themed icon color
               const SizedBox(height: 16),
               Text(
                 title,
                 textAlign: TextAlign.center,
+                // Use theme text style, ensure color comes from theme
                 style: textTheme.headlineSmall?.copyWith(
-                  color: Colors.white,
                   fontWeight: FontWeight.bold,
+                  color: colorScheme.onSurface, // Use theme text color
                 ),
               ),
               const SizedBox(height: 12),
               Text(
                 content,
                 textAlign: TextAlign.center,
+                // Use theme text style, ensure color comes from theme (muted)
                 style: textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[400],
+                  color:
+                      colorScheme.onSurface
+                          .withValues(), // Muted theme text color
                   height: 1.4,
                 ),
               ),
@@ -64,28 +80,35 @@ class DialogUtils {
                   Expanded(
                     child: OutlinedButton(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.grey[400],
-                        side: BorderSide(color: Colors.grey[700]!),
+                        // Use theme color for text/icon
+                        foregroundColor: colorScheme.onSurface.withValues(),
+                        // Use theme color for border
+                        side: BorderSide(
+                          color: colorScheme.outline.withValues(),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
-                      child: const Text('DENY'),
+                      child: const Text('DENY'), // Consider 'CANCEL' or 'CLOSE'
                       onPressed: () => Navigator.of(sheetContext).pop(),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
+                      // Or FilledButton for M3 style
                       style: ElevatedButton.styleFrom(
+                        // Use theme colors
                         backgroundColor: colorScheme.primary,
                         foregroundColor: colorScheme.onPrimary,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                        // Text style can often be inherited from theme's buttonTheme
+                        // textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       child: const Text('SETTINGS'),
                       onPressed: () {
@@ -93,7 +116,6 @@ class DialogUtils {
                         AppSettings.openAppSettings(
                           type: settingsType,
                         ).catchError((error) {
-                          //debugprint("Error opening settings: $error");
                           onErrorSnackbar?.call(
                             "Could not open settings automatically.",
                             isError: true,
@@ -104,7 +126,7 @@ class DialogUtils {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 8), // Adjust bottom padding if needed
             ],
           ),
         );
@@ -112,35 +134,29 @@ class DialogUtils {
     );
   }
 
-  // --- Manual Marking Bottom Sheet (Uses internal StatefulWidget) ---
+  // --- Manual Marking Dialog (Uses internal StatefulWidget & Light Theme) ---
   static Future<void> showManualMarkingDialog({
-    // Changed name back
     required BuildContext context,
     required String subjectName,
     required Function(String reason) onSubmit,
   }) async {
-    // Use showDialog instead of showModalBottomSheet
+    final theme = Theme.of(context); // Get theme here for Dialog properties
+
     await showDialog<void>(
-      // Use showDialog
       context: context,
-      barrierDismissible: false, // Keep non-dismissible during input
+      barrierDismissible: false,
       builder: (BuildContext dialogContext) {
-        // Return the private StatefulWidget defined below, wrapped in Dialog properties
         return Dialog(
-          // Wrap content in Dialog
-          backgroundColor: const Color(0xFF1F1F1F), // Dialog background
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ), // Dialog shape
+          // Use theme's dialog background color
+          backgroundColor: theme.dialogTheme.backgroundColor ?? theme.cardColor,
+          // Use theme's dialog shape or define consistent one
+          shape:
+              theme.dialogTheme.shape ??
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: _ManualMarkingDialogContent(
-            // Use the content widget
+            // Content widget remains the same structure
             subjectName: subjectName,
-            onSubmit: (reason) {
-              // onSubmit callback from content widget still triggers the passed function
-              onSubmit(reason);
-              // No need to pop here, content widget's submit handles it
-            },
-            // Pass dialogContext to allow content widget to pop itself
+            onSubmit: onSubmit,
             dialogContext: dialogContext,
           ),
         );
@@ -149,17 +165,16 @@ class DialogUtils {
   }
 } // End of DialogUtils Class
 
-// --- Private StatefulWidget for Manual Marking Dialog Content ---
-// --- Defined within the same dialog_utils.dart file ---
+// --- Private StatefulWidget for Manual Marking Dialog Content (Light Theme) ---
 class _ManualMarkingDialogContent extends StatefulWidget {
   final String subjectName;
   final Function(String reason) onSubmit;
-  final BuildContext dialogContext; // Context to pop the dialog
+  final BuildContext dialogContext;
 
   const _ManualMarkingDialogContent({
     required this.subjectName,
     required this.onSubmit,
-    required this.dialogContext, // Receive dialog context
+    required this.dialogContext,
   });
 
   @override
@@ -200,7 +215,6 @@ class _ManualMarkingDialogContentState
     if (_formKey.currentState?.validate() ?? false) {
       if (_isValid) {
         widget.onSubmit(_controller.text.trim());
-        // Pop the dialog using the passed context
         Navigator.pop(widget.dialogContext);
       }
     }
@@ -208,61 +222,75 @@ class _ManualMarkingDialogContentState
 
   @override
   Widget build(BuildContext context) {
-    // Build method remains the same as the original ManualMarkingDialog content
-    // It renders the content *inside* the Dialog shell provided by showManualMarkingDialog
+    final theme = Theme.of(context); // Get theme
+    final colorScheme = theme.colorScheme; // Get color scheme
+    final textTheme = theme.textTheme; // Get text theme
+
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(20.0), // Adjusted padding
       child: Form(
-        // Add Form here
         key: _formKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Manual Marking Request', // Updated Title
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color:
-                    Theme.of(context).colorScheme.primary, // Use primary color
+              'Manual Marking Request',
+              // Use theme text style
+              style: textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.bold,
+                color: colorScheme.onSurface, // Use theme text color
               ),
             ),
             const SizedBox(height: 8),
             Text(
               widget.subjectName,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[400],
-              ), // Adjusted style
+              // Use theme text style (muted)
+              style: textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurface.withValues(),
+              ),
             ),
             const SizedBox(height: 16),
             TextFormField(
-              // Use TextFormField for validation
               controller: _controller,
               maxLines: 3,
-              style: const TextStyle(color: Colors.white),
+              // Use theme text color for input
+              style: TextStyle(color: colorScheme.onSurface),
               decoration: InputDecoration(
                 hintText: 'Enter reason (min. 10 characters)',
-                hintStyle: TextStyle(color: Colors.grey[600]),
+                // Use muted theme text color for hint
+                hintStyle: TextStyle(color: colorScheme.onSurface.withValues()),
                 filled: true,
-                fillColor: const Color(0xFF2C2C2C), // Darker fill
+                // Use a light fill color from theme or subtle grey
+                fillColor: colorScheme.surface.withValues(), // Subtle fill
+                // Use theme's input border or define a light one
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none,
+                  borderSide: BorderSide(
+                    color: colorScheme.outline.withValues(),
+                  ), // Subtle border
+                ),
+                enabledBorder: OutlineInputBorder(
+                  // Explicitly define enabled state border
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: colorScheme.outline.withValues(),
+                  ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
+                  // Use primary color for focus border
                   borderSide: BorderSide(
-                    color: Theme.of(context).colorScheme.primary,
+                    color: colorScheme.primary,
                     width: 1.5,
-                  ), // Use primary color
+                  ),
                 ),
-                errorStyle: TextStyle(
-                  color: Theme.of(context).colorScheme.error.withValues(),
-                ), // Error style
+                // Use theme error color
+                errorStyle: TextStyle(color: colorScheme.error),
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 10,
-                ), // Adjust padding
+                ),
               ),
               validator: (value) {
                 if (value == null || value.trim().length < 10) {
@@ -270,42 +298,31 @@ class _ManualMarkingDialogContentState
                 }
                 return null;
               },
-              onChanged:
-                  (_) => _validateInput(), // Update internal state for button
+              onChanged: (_) => _validateInput(),
             ),
             const SizedBox(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
-                  onPressed:
-                      () => Navigator.pop(
-                        widget.dialogContext,
-                      ), // Use passed context
+                  onPressed: () => Navigator.pop(widget.dialogContext),
+                  // Use muted theme color for cancel text
                   child: Text(
                     'Cancel',
-                    style: TextStyle(color: Colors.grey[400]),
+                    style: TextStyle(color: colorScheme.onSurface.withValues()),
                   ),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed:
-                      _isValid
-                          ? _submit
-                          : null, // Use internal state for enable/disable
+                  // Or FilledButton
+                  onPressed: _isValid ? _submit : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                    disabledBackgroundColor: Theme.of(context)
-                        .colorScheme
-                        .primary
-                        .withValues(), // Style for disabled
-                    disabledForegroundColor: Theme.of(
-                      context,
-                    ).colorScheme.onPrimary.withValues(),
+                    // Use theme colors
+                    // backgroundColor: colorScheme.primary,
+                    foregroundColor: colorScheme.onPrimary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
-                    ), // Consistent shape
+                    ),
                   ),
                   child: const Text('Submit'),
                 ),
