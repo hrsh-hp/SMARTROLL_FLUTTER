@@ -176,7 +176,7 @@ class AttendanceDataCollector {
               () =>
                   throw TimeoutException('Getting accurate location timed out'),
         );
-      } on TimeoutException catch (e) {
+      } on TimeoutException {
         await _location.changeSettings(accuracy: LocationAccuracy.balanced);
 
         locationData = await _location.getLocation().timeout(

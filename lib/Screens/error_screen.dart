@@ -40,7 +40,7 @@ class ErrorScreen extends StatelessWidget {
                 color: Colors.red.shade400, // Use theme's error color
                 size: 70,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
               // Error Title
               Text(
@@ -65,14 +65,14 @@ class ErrorScreen extends StatelessWidget {
                   height: 1.4, // Improve line spacing for readability
                 ),
               ),
-              const SizedBox(height: 32), // More space before button
+              const SizedBox(height: 28), // More space before button
               // Retry Button (Conditional)
               if (showRetryButton)
-                ElevatedButton.icon(
+                OutlinedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    // backgroundColor: Theme.of(context).colorScheme.primary,
                     foregroundColor:
-                        colorScheme.onPrimary, // Text color on primary
+                        colorScheme.primary, // Text color on primary
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24,
                       vertical: 12,

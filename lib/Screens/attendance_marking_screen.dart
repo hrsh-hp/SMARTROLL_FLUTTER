@@ -26,13 +26,14 @@ class AttendanceMarkingScreen extends StatefulWidget {
 }
 
 class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final AuthService _authService = AuthService();
   final deviceIdService = DeviceIDService();
   final SecurityService _securityService = SecurityService();
   final AttendanceDataCollector _dataCollector = AttendanceDataCollector();
 
   late final MarkAttendaceService _attendanceHandlerService;
+  final Set<String> _cancelledMarkingSlugs = {};
 
   // --- State Variables (Original Names) ---
   bool _isLoadingTimetable = true;
@@ -57,7 +58,52 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       authService: _authService,
       deviceIDService: deviceIdService,
     );
+    WidgetsBinding.instance.addObserver(this); // Register observer
     _initializeAndFetchData();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this); // Unregister observer
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    debugPrint("AttendanceScreen Lifecycle State: $state");
+
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      // App is going into the background or becoming inactive (e.g., phone call)
+      // Check if any lecture is currently being marked
+      _isMarkingLecture.forEach((lectureSlug, isMarking) {
+        if (isMarking) {
+          //debugPrint("App pausing/inactive during marking for lecture: $lectureSlug. Cancelling.");
+          // Mark this lecture as cancelled
+          _cancelledMarkingSlugs.add(lectureSlug);
+          // Immediately reset the UI state for this lecture
+          _resetMarkingState(lectureSlug);
+          // Note: The ongoing Future in AttendanceHandlerService will still complete,
+          // but we will ignore its result because the state is reset.
+          // Explicitly cancelling the audio/location within the service is more complex.
+        }
+      });
+    } else if (state == AppLifecycleState.resumed) {
+      // App came back to the foreground
+      if (_cancelledMarkingSlugs.isNotEmpty) {
+        // Show snackbar for the first cancelled lecture (or a general message)
+        _showSnackbar(
+          "Attendance marking stopped. Please do not close or minimize the app while marking.",
+          isError: true,
+          duration: const Duration(
+            seconds: 5,
+          ), // Longer duration for visibility
+        );
+        // Clear the cancelled flags now that the message is shown
+        _cancelledMarkingSlugs.clear();
+      }
+    }
   }
 
   Future<void> _loadAccessToken() async {
@@ -224,7 +270,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   }
   // ------------------------------
 
-  // --- Manual Marking Dialog Call (ADDED ROBUSTNESS) ---
+  // --- Manual Marking Dialog call---
   void _showManualMarkingDialog(dynamic lecture) {
     DialogUtils.showManualMarkingDialog(
       // Call the static method
@@ -252,9 +298,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       },
     );
   }
-  // ------------------------------
 
-  // // --- UI Helpers LOGOUT(Unchanged) ---
+  // // --- LOGOUT ---
   void _handleLogout() async {
     await secureStorage.deleteAll();
     if (mounted) {
@@ -285,25 +330,28 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
     }
   }
 
-  void _showSnackbar(
+  ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _showSnackbar(
     String message, {
     bool isError = true,
     Color? backgroundColor,
-    Duration duration = const Duration(seconds: 4),
+    Duration? duration = const Duration(seconds: 4),
   }) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor:
-              backgroundColor ??
-              (isError ? Colors.red.shade700 : Colors.green.shade700),
-          behavior: SnackBarBehavior.floating,
-          duration: duration,
-        ),
-      );
-    }
+    if (!mounted) return null;
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    final controller = ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor:
+            backgroundColor ??
+            (isError
+                ? Colors.red.shade700
+                : Colors.green), // Use a neutral color for progress
+        behavior: SnackBarBehavior.floating,
+        duration: duration ?? const Duration(minutes: 5),
+      ),
+    );
+    return controller;
   }
 
   String _formatTime(String timeString) {
@@ -316,9 +364,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       return timeString;
     }
   }
-  // ----------------
 
-  // --- Build Method (AppBar Unchanged) ---
+  // --- Build Method ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -742,7 +789,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
-              disabledBackgroundColor: Colors.grey.shade700,
+              disabledBackgroundColor: Colors.blueAccent.shade100,
               disabledForegroundColor: Colors.grey.shade400,
             ),
             child:
@@ -779,7 +826,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
-              disabledBackgroundColor: Colors.grey.shade700,
+              disabledBackgroundColor: Colors.grey.shade300,
               disabledForegroundColor: Colors.grey.shade400,
             ),
             child:
@@ -882,69 +929,54 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
 
   // --- Helper: Error State Widget ---
   Widget _buildErrorState() {
-    // Use theme colors
     final Color errorColor =
-        Theme.of(context).colorScheme.error; // Standard error color
+        Theme.of(context).colorScheme.error; 
     final Color primaryTextColor =
-        Theme.of(context).colorScheme.onSurface; // Main text color
-    final Color secondaryTextColor =
-        primaryTextColor.withValues(); // Muted text color
+        Theme.of(context).colorScheme.onSurface; 
+    final Color secondaryTextColor = primaryTextColor.withAlpha(
+      (0.5 * 255).toInt(),
+    );
 
     return Center(
       child: Padding(
-        // Increased padding for more breathing room
         padding: const EdgeInsets.symmetric(horizontal: 30.0, vertical: 20.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Icon using theme's error color
             Icon(
-              Icons
-                  .cloud_off_outlined, // A slightly different icon, feels more connection-related
-              size: 56, // Slightly larger icon
-              color:
-                  errorColor
-                      .withValues(), // Use error color with slight transparency
+              Icons.cloud_off_outlined,
+              size: 56,
+              color: errorColor.withValues(),
             ),
-            const SizedBox(height: 24), // Increased spacing
-            // Title Text using theme style
+            const SizedBox(height: 24),
             Text(
-              'Oops!', // Clearer title
+              'Oops!',
               textAlign: TextAlign.center,
-              // Use a prominent theme text style
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 color: primaryTextColor,
-                fontWeight: FontWeight.w600, // Adjust weight as needed
+                fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 12), // Spacing between title and message
-            // Message Text using theme style and muted color
+            const SizedBox(height: 12),
             Text(
               _fetchErrorMessage ??
                   "Something went wrong. Please try again.", // Default message
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: secondaryTextColor, // Muted color
-                height: 1.5, // Improved line spacing
+                color: secondaryTextColor,
+                height: 1.5,
               ),
             ),
-            const SizedBox(height: 32), // Increased spacing before button
-            // Button using theme's ElevatedButton style (or customize minimally)
-            ElevatedButton.icon(
+            const SizedBox(height: 32),
+            OutlinedButton.icon(
               onPressed: _initializeAndFetchData, // Retry full init
               icon: const Icon(Icons.refresh_rounded, size: 20), // Refined icon
               label: const Text('Retry'),
-              // Let the button style primarily come from ElevatedButtonThemeData
-              // Only override specific things if necessary
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 32, // More horizontal padding
-                  vertical: 14, // More vertical padding
+                  horizontal: 32,
+                  vertical: 14,
                 ),
-                // Example: Ensure text style uses theme if not default
-                // textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-                //   fontWeight: FontWeight.w600
-                // ),
               ),
             ),
           ],
@@ -957,12 +989,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   Widget _buildEmptyState() {
     // Use theme colors
     final Color primaryTextColor = Theme.of(context).colorScheme.onSurface;
-    final Color secondaryTextColor = primaryTextColor.withValues();
     // Use a neutral theme color for the icon, e.g., secondary or a grey derived from surface
-    final Color iconColor =
-        Theme.of(
-          context,
-        ).colorScheme.secondary; // Or onSurface.withOpacity(0.4)
+    final Color iconColor = Theme.of(context).colorScheme.secondary;
 
     return Center(
       child: Padding(
@@ -970,72 +998,39 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Icon using a neutral theme color
-            Icon(
-              Icons.event_note_outlined, // Icon suggesting an empty schedule
-              size: 56,
-              color: iconColor,
-            ),
+            Icon(Icons.event_note_outlined, size: 56, color: iconColor),
             const SizedBox(height: 24),
 
-            // Title Text
             Text(
-              'No Lectures Today',
+              'No Ongoing Sessions currently.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 color: primaryTextColor,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 12),
-
-            // Subtitle Text (Optional, adds context)
-            Text(
-              'Your schedule is clear. Enjoy your day!',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: secondaryTextColor,
-                height: 1.5,
-              ),
-            ),
             const SizedBox(height: 32),
-
-            // Button - Consider OutlinedButton for less emphasis than error retry
             OutlinedButton.icon(
               onPressed: () => _fetchTimetableData(showLoading: true),
               icon: const Icon(Icons.refresh_rounded, size: 20),
               label: const Text('Check Again'),
-              // Let the style come from OutlinedButtonThemeData or customize
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 14,
+                  horizontal: 16,
+                  vertical: 13,
                 ),
-                // Ensure foreground color uses theme (important for outlined buttons)
                 foregroundColor: Theme.of(context).colorScheme.primary,
                 side: BorderSide(
-                  // Define border color explicitly if needed
                   color: Theme.of(context).colorScheme.primary.withValues(),
                 ),
-                // textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-                //   fontWeight: FontWeight.w600
-                // ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10), //  rounding
+                ),
+                textStyle: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
-            // --- OR --- Keep ElevatedButton if you prefer consistency
-            /*
-          ElevatedButton.icon(
-            onPressed: () => _fetchTimetableData(showLoading: true),
-            icon: const Icon(Icons.refresh_rounded, size: 20),
-            label: const Text('Check Again'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-              // Maybe use less prominent colors? e.g., grey or secondary
-              // backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-              // foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
-            ),
-          ),
-          */
           ],
         ),
       ),

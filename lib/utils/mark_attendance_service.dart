@@ -48,7 +48,7 @@ class MarkAttendaceService {
       String message, {
       bool isError,
       Color? backgroundColor,
-      Duration duration,
+      Duration? duration,
     })
     showSnackbar,
     required Function(String message) handleCriticalError,
@@ -82,7 +82,7 @@ class MarkAttendaceService {
     if (devModeEnabledNow || debuggerAttachedNow) {
       //debugprint("Security check failed at time of marking. Aborting.");
       handleCriticalError(
-        "Attendance marking disabled while ${devModeEnabledNow ? "Developer Options are active." : "Debugger is Attached."}",
+        "Attendance marking disabled while ${devModeEnabledNow ? "Developer Options are active." : "USB/Wireless debugging is on."}",
       );
       return;
     }
@@ -112,11 +112,6 @@ class MarkAttendaceService {
     if (currentDevId == null || currentDevId.isEmpty) {
       showSnackbar("Device Identification error. Retrying...", isError: true);
       await getAndStoreDeviceId(); // Call the screen's method to refetch/store
-      // Re-read the device ID from where the screen stores it (assuming getAndStoreDeviceId updates it)
-      // This part is slightly awkward - ideally the screen passes the updated ID back,
-      // or the DeviceIDService provides a direct getter. Assuming getAndStoreDeviceId updates a provider/state.
-      // For simplicity here, we'll assume the calling screen needs to manage passing the updated ID if this happens.
-      // Let's show an error if it's still null after retry.
       try {
         currentDevId = await deviceIDService.getUniqueDeviceId();
       } catch (_) {} // Try getting again
@@ -134,7 +129,7 @@ class MarkAttendaceService {
       isMarkingLecture[lectureSlug] = true;
       markingInitiator[lectureSlug] = initiator;
     });
-
+    if (isMarkingLecture[lectureSlug] == null) return;
     // --- Conditional Data Collection ---
     AttendanceDataResult? dataResult;
     if (initiator == 'auto') {
@@ -212,8 +207,7 @@ class MarkAttendaceService {
             title: dialogTitle,
             content: dialogContent,
             settingsType: settingsType,
-            onErrorSnackbar:
-                showSnackbar, // Pass the screen's snackbar function for error handling
+            onErrorSnackbar: showSnackbar,
           );
         } else {
           showSnackbar(errorMsg, isError: true);
@@ -229,11 +223,13 @@ class MarkAttendaceService {
         return;
       }
     }
+    if (isMarkingLecture[lectureSlug] == null) return;
 
     // --- Prepare and Execute API Call ---
     showSnackbar(
       initiator == 'auto' ? "Marking attendance..." : "Submitting request...",
       isError: false,
+      duration: null,
     );
     String encodedDeviceId;
     try {
@@ -246,7 +242,7 @@ class MarkAttendaceService {
       return;
     }
 
-    if (!context.mounted) return;
+    if (!context.mounted || isMarkingLecture[lectureSlug] == null) return;
     // Call the internal API request helper
     await _makeApiRequestWithRetryInternal(
       // Pass necessary callbacks and data
@@ -284,12 +280,9 @@ class MarkAttendaceService {
   Future<void> _makeApiRequestWithRetryInternal({
     // Callbacks & Services needed
     required BuildContext context,
-    required Function(VoidCallback fn)
-    setState, // Needed if retry updates UI directly (unlikely here)
-    required Map<String, bool>
-    isMarkingLecture, // Needed? Only if retry changes this map? Usually not.
-    required Map<String, String>
-    markingInitiator, // Needed? Only if retry changes this map? Usually not.
+    required Function(VoidCallback fn) setState,
+    required Map<String, bool> isMarkingLecture,
+    required Map<String, String> markingInitiator,
     required Function(String lectureSlug) resetMarkingState,
     required Function(
       String message, {
@@ -314,7 +307,7 @@ class MarkAttendaceService {
     String? reason,
   }) async {
     String currentToken = initialAccessToken; // Token for the current attempt
-
+    if (isMarkingLecture[lectureSlug] == null) return; // Check again
     // --- Function to build the request ---
     http.BaseRequest buildRequest(String token) {
       bool isMultipart = initiator == 'auto';
@@ -377,6 +370,7 @@ class MarkAttendaceService {
     // --- End processSuccessResponse function ---
 
     try {
+      if (isMarkingLecture[lectureSlug] == null) return;
       // --- Initial Attempt ---
       http.BaseRequest request = buildRequest(currentToken);
       //debugprint("Attempting API Request (Initial)");
@@ -405,11 +399,11 @@ class MarkAttendaceService {
       } else if (statusCode == 401 || statusCode == 403) {
         // --- Handle Auth Error & Retry ---
         //debugprint("Received 401/403. Attempting token refresh...");
-        showSnackbar(
-          "Session may have expired. Refreshing...",
-          isError: false,
-          backgroundColor: Colors.orange,
-        ); // Inform user
+        // showSnackbar(
+        //   "Session may have expired. Refreshing...",
+        //   isError: false,
+        //   backgroundColor: Colors.orange,
+        // ); // Inform user
         final refreshResult = await authService.attemptTokenRefresh();
 
         if (refreshResult == RefreshStatus.success) {
@@ -506,13 +500,16 @@ class MarkAttendaceService {
         }
       } else {
         // Other non-200, non-401/403 errors on initial attempt
-        String errorMessage = 'Server error';
+        String errorMessage = 'Server error!, Please try again.';
         try {
           final d = jsonDecode(responseBody);
           errorMessage = "${d['message']}";
         } catch (_) {}
-        throw Exception('$errorMessage (Status: $statusCode)');
+        throw Exception(errorMessage.toString());
       }
+    } on TimeoutException {
+      // Handle timeout error
+      showSnackbar("Request timed out. Please try again.", isError: true);
     } catch (e) {
       // Catch all errors from API call, refresh, or retry
       //debugprint('API Request/Retry Error: ${e.toString()}');
@@ -523,8 +520,7 @@ class MarkAttendaceService {
         isError: true,
       );
     } finally {
-      // Always reset the marking state for this specific lecture via callback
       resetMarkingState(lectureSlug);
     }
   }
-} // End of MarkAttendaceService
+}

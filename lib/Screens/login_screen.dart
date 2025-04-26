@@ -195,12 +195,12 @@ class _LoginScreenState extends State<LoginScreen>
                 duration: const Duration(milliseconds: 300), // Fade duration
                 child:
                     _showRetry // Only build the button if _showRetry is true
-                        ? ElevatedButton.icon(
+                        ? OutlinedButton.icon(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: theme.colorScheme.surface,
                             foregroundColor: theme.colorScheme.primary,
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
+                              horizontal: 18,
                               vertical: 12,
                             ),
                             shape: RoundedRectangleBorder(
@@ -212,28 +212,12 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                           icon: const Icon(Icons.refresh_rounded, size: 20),
                           label: const Text('Retry Login'),
-                          onPressed:
-                              _initiateLogin, // Call the login initiation again
+                          onPressed: _initiateLogin,
                         )
                         : const SizedBox.shrink(), // Render nothing if not showing retry
               ),
             ),
           ),
-
-          // --- Optional: Redirecting Indicator (Could also be positioned) ---
-          if (_isRedirecting)
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: Padding(
-                padding: const EdgeInsets.only(
-                  bottom: 70.0,
-                ), // Position slightly above button area
-                child: Text(
-                  'Redirecting to login...',
-                  style: TextStyle(color: Colors.grey[500]),
-                ),
-              ),
-            ),
         ],
       ),
     );
