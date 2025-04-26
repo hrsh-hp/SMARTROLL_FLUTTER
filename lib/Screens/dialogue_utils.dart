@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:app_settings/app_settings.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Utility class for showing common dialogs and bottom sheets.
 class DialogUtils {
@@ -160,6 +161,123 @@ class DialogUtils {
             dialogContext: dialogContext,
           ),
         );
+      },
+    );
+  }
+
+  /// Shows a non-dismissible dialog forcing the user to update the app.
+  static Future<void> showForceUpdateDialog({
+    required BuildContext context,
+    required String message,
+    required String? updateUrl, // Store URL
+  }) async {
+    final theme = Theme.of(context);
+
+    // Function to launch store URL
+    Future<void> launchStore() async {
+      if (updateUrl != null) {
+        final uri = Uri.parse(updateUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } else {
+          debugPrint("Could not launch update URL: $updateUrl");
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Could not open the app store."),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      } else {
+        debugPrint("Update URL is null.");
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Update link is missing."),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    }
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false, // User MUST update
+      builder: (BuildContext dialogContext) {
+        // --- Use PopScope with onPopInvokedWithResult ---
+        return PopScope(
+          canPop: false, // Prevent closing with back button/gesture
+          // The 'didPop' parameter indicates if the pop attempt actually occurred
+          // The 'result' parameter holds data passed if popped programmatically (not relevant here)
+          onPopInvokedWithResult: (bool didPop, dynamic result) {
+            // This callback runs *after* a pop attempt.
+            // Since canPop is false, didPop should always be false when triggered
+            // by a system back gesture or barrier dismiss.
+            if (didPop) return; // Should not happen if canPop is false
+
+            // If needed, you could add logic here if the dialog *was* somehow popped,
+            // but with canPop: false, the primary goal is just to prevent it.
+            debugPrint(
+              "Pop attempt blocked by PopScope in force update dialog.",
+            );
+
+            // Aggressive option: Exit app if back button is pressed repeatedly?
+            // Be very careful with this, generally not recommended UX.
+            // SystemNavigator.pop();
+          },
+          child: AlertDialog(
+            backgroundColor: theme.colorScheme.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
+            ),
+            icon: Icon(
+              Icons.system_update_alt_rounded,
+              color: theme.colorScheme.primary,
+              size: 48,
+            ),
+            title: Text(
+              'Update Required',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.textTheme.bodyLarge?.color,
+              ),
+            ),
+            content: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.textTheme.bodySmall?.color?.withAlpha(
+                  (0.8 * 255).toInt(),
+                ),
+              ),
+            ),
+            actionsAlignment: MainAxisAlignment.center,
+            actionsPadding: const EdgeInsets.only(
+              bottom: 20,
+              left: 20,
+              right: 20,
+            ),
+            actions: <Widget>[
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.colorScheme.primary,
+                  foregroundColor: theme.colorScheme.onPrimary,
+                  minimumSize: const Size.fromHeight(45),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onPressed: launchStore,
+                child: const Text('Update Now'),
+              ),
+            ],
+          ),
+        );
+        // --- End PopScope ---
       },
     );
   }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:smartroll/Screens/dialogue_utils.dart';
 import 'package:smartroll/utils/constants.dart'; // Assuming SecurityService is here or imported
 import 'package:smartroll/utils/effects.dart';
+import 'package:smartroll/utils/version_service.dart';
 import 'dart:async';
 
 // Import the AuthService and Enums
@@ -23,6 +25,7 @@ class _SplashScreenState extends State<SplashScreen>
   // Instantiate the AuthService
   final AuthService _authService = AuthService();
   final SecurityService _securityService = SecurityService();
+  final VersionService _versionService = VersionService();
 
   @override
   void initState() {
@@ -42,6 +45,29 @@ class _SplashScreenState extends State<SplashScreen>
     Widget nextPage = LoginScreen();
 
     try {
+      // --- 0. Version Check ---
+      final versionResult = await _versionService.checkAppVersion();
+      if (!mounted) return;
+
+      if (versionResult.status == VersionStatus.forceUpdateRequired) {
+        // Show blocking dialog and STOP further checks/navigation
+        await DialogUtils.showForceUpdateDialog(
+          context: context,
+          message:
+              versionResult.message ??
+              "Please update the app to continue.", // Use message from API
+          updateUrl: versionResult.updateUrl,
+        );
+        // Since the dialog is blocking and non-dismissible, execution stops here
+        // until the user updates (or somehow kills the app).
+        return; // Stop processing
+      } else if (versionResult.status == VersionStatus.error) {
+        //Block the app (safer if version check is critical)
+        errorMessage =
+            "Could not verify app version. Please check your connection and try again.";
+        checksPassed = false;
+      }
+
       // --- 1. Security Checks ---
       Map<String, bool> securityStatus = {};
       try {
@@ -56,8 +82,8 @@ class _SplashScreenState extends State<SplashScreen>
         }; // Default to non-blocking if check fails
       }
 
-      if (securityStatus['isCompromised'] == true ||
-          securityStatus['isDeveloperModeEnabled'] == true ||
+      if (securityStatus['isCompromised'] == true &&
+          securityStatus['isDeveloperModeEnabled'] == true &&
           securityStatus['isDebuggerAttached'] == true) {
         //debugprint( "Security check failed (Root/Jailbreak or DevMode ON). Blocking app.",);
         String msg =

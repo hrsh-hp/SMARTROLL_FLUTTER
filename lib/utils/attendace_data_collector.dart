@@ -251,7 +251,7 @@ class AttendanceDataCollector {
           noiseSuppress: false,
           echoCancel: false,
           numChannels: 1,
-          sampleRate: 16000,
+          sampleRate: 48000,
         ), // Config remains the same
         path: tempPath,
       );
