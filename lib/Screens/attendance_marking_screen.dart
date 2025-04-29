@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
 
 import 'package:smartroll/Screens/dialogue_utils.dart'; // Ensure this path is correct
-import 'package:smartroll/Screens/splash_screen.dart';
 import 'package:smartroll/utils/mark_attendance_service.dart';
 import 'error_screen.dart'; // Ensure this path is correct
 
@@ -35,7 +35,6 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   late final MarkAttendaceService _attendanceHandlerService;
   final Set<String> _cancelledMarkingSlugs = {};
 
-  // --- State Variables (Original Names) ---
   bool _isLoadingTimetable = true;
   String? _fetchErrorMessage;
   // List<dynamic> _timetableData = [];
@@ -46,8 +45,6 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   final Map<String, bool> _isMarkingLecture = {};
   final Map<String, String> _markingInitiator = {};
   List<Map<String, dynamic>> _groupedTimetableData = [];
-
-  // ---------------------
 
   @override
   void initState() {
@@ -80,13 +77,9 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       _isMarkingLecture.forEach((lectureSlug, isMarking) {
         if (isMarking) {
           //debugPrint("App pausing/inactive during marking for lecture: $lectureSlug. Cancelling.");
-          // Mark this lecture as cancelled
           _cancelledMarkingSlugs.add(lectureSlug);
           // Immediately reset the UI state for this lecture
           _resetMarkingState(lectureSlug);
-          // Note: The ongoing Future in AttendanceHandlerService will still complete,
-          // but we will ignore its result because the state is reset.
-          // Explicitly cancelling the audio/location within the service is more complex.
         }
       });
     } else if (state == AppLifecycleState.resumed) {
@@ -171,7 +164,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
           final timeB = DateFormat("HH:mm").parse(b['start_time']);
           return timeA.compareTo(timeB);
         } catch (e) {
-          return 0; // Keep original order on error
+          return 0; 
         }
       });
 
@@ -300,14 +293,83 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   }
 
   // // --- LOGOUT ---
-  void _handleLogout() async {
-    await secureStorage.deleteAll();
-    if (mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const SplashScreen()),
-        (route) => false,
-      );
+  Future<void> _handleLogout() async {
+    // --- Show Confirmation Dialog ---
+    final bool? confirmLogout = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false, // User must choose an action
+      builder: (BuildContext dialogContext) {
+        final theme = Theme.of(context); // Get theme for styling
+
+        return AlertDialog(
+          backgroundColor: theme.colorScheme.surface, // Dark background
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          title: Text(
+            'Confirm Logout',
+            style: TextStyle(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            'Are you sure you want to log out and exit the app?',
+            style: TextStyle(color: Colors.grey[700]),
+          ),
+          actions: <Widget>[
+            // No / Cancel Button
+            TextButton(
+              child: Text('Cancel', style: TextStyle(color: Colors.grey[400])),
+              onPressed: () {
+                Navigator.of(
+                  dialogContext,
+                ).pop(false); // Return false when cancelled
+              },
+            ),
+            // Yes / Logout Button
+            TextButton(
+              child: Text(
+                'Logout',
+                style: TextStyle(color: theme.colorScheme.error),
+              ), // Use error color for emphasis
+              onPressed: () {
+                Navigator.of(
+                  dialogContext,
+                ).pop(true); // Return true when confirmed
+              },
+            ),
+          ],
+        );
+      },
+    );
+    // --- End Confirmation Dialog ---
+
+    // --- Process Confirmation ---
+    // Check if the dialog returned true (meaning user confirmed)
+    if (confirmLogout == true) {
+      debugPrint("User confirmed logout. Clearing data and exiting.");
+
+      // 1. Clear Secure Storage (using your AuthService or directly)
+      try {
+        // Assuming AuthService has a clearTokens method that uses secureStorage
+        await _authService.clearTokens();
+        // OR if accessing directly:
+        // await _storage.deleteAll();
+        debugPrint("Secure storage cleared.");
+      } catch (e) {
+        debugPrint("Error clearing secure storage during logout: $e");
+        // Decide if you still want to exit or show an error
+      }
+
+      // 2. Close the App
+      // Use SystemNavigator.pop() to exit the application.
+      // Note: This might be discouraged on iOS by Apple's guidelines for
+      // normal app flows, but it's often acceptable for a logout/exit action.
+      await SystemNavigator.pop();
+    } else {
+      debugPrint("User cancelled logout.");
+      // Do nothing if user cancelled
     }
   }
 
@@ -929,10 +991,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
 
   // --- Helper: Error State Widget ---
   Widget _buildErrorState() {
-    final Color errorColor =
-        Theme.of(context).colorScheme.error; 
-    final Color primaryTextColor =
-        Theme.of(context).colorScheme.onSurface; 
+    final Color errorColor = Theme.of(context).colorScheme.error;
+    final Color primaryTextColor = Theme.of(context).colorScheme.onSurface;
     final Color secondaryTextColor = primaryTextColor.withAlpha(
       (0.5 * 255).toInt(),
     );
