@@ -82,8 +82,8 @@ class _SplashScreenState extends State<SplashScreen>
         }; // Default to non-blocking if check fails
       }
 
-      if (securityStatus['isCompromised'] == true &&
-          securityStatus['isDeveloperModeEnabled'] == true &&
+      if (securityStatus['isCompromised'] == true ||
+          securityStatus['isDeveloperModeEnabled'] == true ||
           securityStatus['isDebuggerAttached'] == true) {
         //debugprint( "Security check failed (Root/Jailbreak or DevMode ON). Blocking app.",);
         String msg =

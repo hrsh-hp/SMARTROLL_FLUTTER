@@ -180,7 +180,7 @@ class DialogUtils {
         if (await canLaunchUrl(uri)) {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
         } else {
-          debugPrint("Could not launch update URL: $updateUrl");
+          //debugPrint("Could not launch update URL: $updateUrl");
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -191,7 +191,7 @@ class DialogUtils {
           }
         }
       } else {
-        debugPrint("Update URL is null.");
+        //debugPrint("Update URL is null.");
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -220,9 +220,7 @@ class DialogUtils {
 
             // If needed, you could add logic here if the dialog *was* somehow popped,
             // but with canPop: false, the primary goal is just to prevent it.
-            debugPrint(
-              "Pop attempt blocked by PopScope in force update dialog.",
-            );
+            //debugPrint( "Pop attempt blocked by PopScope in force update dialog.",);
 
             // Aggressive option: Exit app if back button is pressed repeatedly?
             // Be very careful with this, generally not recommended UX.

@@ -68,7 +68,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    debugPrint("AttendanceScreen Lifecycle State: $state");
+    //debugPrint("AttendanceScreen Lifecycle State: $state");
 
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
@@ -348,7 +348,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
     // --- Process Confirmation ---
     // Check if the dialog returned true (meaning user confirmed)
     if (confirmLogout == true) {
-      debugPrint("User confirmed logout. Clearing data and exiting.");
+      //debugPrint("User confirmed logout. Clearing data and exiting.");
 
       // 1. Clear Secure Storage (using your AuthService or directly)
       try {
@@ -356,9 +356,9 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         await _authService.clearTokens();
         // OR if accessing directly:
         // await _storage.deleteAll();
-        debugPrint("Secure storage cleared.");
+        //debugPrint("Secure storage cleared.");
       } catch (e) {
-        debugPrint("Error clearing secure storage during logout: $e");
+        //debugPrint("Error clearing secure storage during logout: $e");
         // Decide if you still want to exit or show an error
       }
 
@@ -368,7 +368,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       // normal app flows, but it's often acceptable for a logout/exit action.
       await SystemNavigator.pop();
     } else {
-      debugPrint("User cancelled logout.");
+      //debugPrint("User cancelled logout.");
       // Do nothing if user cancelled
     }
   }

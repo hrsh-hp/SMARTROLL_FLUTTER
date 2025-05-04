@@ -79,7 +79,7 @@ class MarkAttendaceService {
       //debugprint("Error re-checking dev mode and debugger: $e");
     }
 
-    if (!devModeEnabledNow || !debuggerAttachedNow) {
+    if (devModeEnabledNow || debuggerAttachedNow) {
       //debugprint("Security check failed at time of marking. Aborting.");
       handleCriticalError(
         "Attendance marking disabled while ${devModeEnabledNow ? "Developer Options are active." : "USB/Wireless debugging is on."}",

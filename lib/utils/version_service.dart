@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:smartroll/utils/constants.dart'; // Assuming backendBaseUrl is here
@@ -66,10 +65,10 @@ class VersionService {
               : Platform.isIOS
               ? 'ios'
               : 'unknown';
-      debugPrint("Current App Version: $currentVersion, Platform: $platform");
+      //debugPrint("Current App Version: $currentVersion, Platform: $platform");
 
       if (platform == 'unknown') {
-        debugPrint("Unknown platform, skipping version check.");
+        //debugPrint("Unknown platform, skipping version check.");
         return VersionCheckResult(
           status: VersionStatus.upToDate,
         ); // Assume up-to-date on unknown platforms
@@ -77,21 +76,19 @@ class VersionService {
 
       // 2. Call Backend API
       final url = Uri.parse(
-        '$backendBaseUrl/apii/version_check?platform=$platform',
+        '$backendBaseUrl/api/version_check?platform=$platform',
       );
       final response = await http.get(url).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        debugPrint("Version Check API Response: $data");
+        //debugPrint("Version Check API Response: $data");
         final String latestVersion = data['latestVersion'];
         final String minimumRequiredVersion = data['minimumRequiredVersion'];
         final String updateUrls = data['updateUrl'];
         final String? message = data['updateMessage'];
 
-        debugPrint(
-          "Version Check API Response: Latest=$latestVersion, MinRequired=$minimumRequiredVersion",
-        );
+        //debugPrint("Version Check API Response: Latest=$latestVersion, MinRequired=$minimumRequiredVersion",);
 
         // 3. Compare Versions
         int comparison = _compareVersion(
@@ -119,7 +116,7 @@ class VersionService {
                       .optionalUpdateAvailable, // Or just upToDate if you don't handle optional
               latestVersion: latestVersion,
               updateUrl: updateUrls,
-              message: message,
+              message: message ?? "An update is available.", // Default message
             );
           } else {
             // Already on the latest version
@@ -128,14 +125,12 @@ class VersionService {
         }
       } else {
         // API call failed (non-200 status)
-        debugPrint(
-          "Version check API failed with status: ${response.statusCode}",
-        );
+        //debugPrint("Version check API failed with status: ${response.statusCode}",);
         return VersionCheckResult(status: VersionStatus.error);
       }
     } catch (e) {
       // Network error, parsing error, etc.
-      debugPrint("Error during version check: $e");
+      //debugPrint("Error during version check: $e");
       return VersionCheckResult(status: VersionStatus.error);
     }
   }
