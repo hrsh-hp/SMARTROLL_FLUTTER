@@ -11,8 +11,8 @@ import 'package:smartroll/Screens/login_screen.dart';
 // Import necessary services and utilities used by the logic
 import 'package:smartroll/utils/attendace_data_collector.dart';
 import 'package:smartroll/utils/constants.dart';
-import 'package:smartroll/utils/auth_service.dart';
-import 'package:smartroll/utils/device_id_service.dart';
+import 'package:smartroll/services/auth_service.dart';
+import 'package:smartroll/services/device_id_service.dart';
 
 class MarkAttendaceService {
   // Services needed by the handler

@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:smartroll/Screens/dialogue_utils.dart';
 import 'package:smartroll/utils/constants.dart'; // Assuming SecurityService is here or imported
 import 'package:smartroll/utils/effects.dart';
-import 'package:smartroll/utils/version_service.dart';
+import 'package:smartroll/services/version_service.dart';
 import 'dart:async';
 
 // Import the AuthService and Enums
-import '../utils/auth_service.dart';
+import '../services/auth_service.dart';
 
 // Import your screens
 import 'attendance_marking_screen.dart';

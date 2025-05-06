@@ -5,13 +5,13 @@ import 'dart:convert';
 import 'package:intl/intl.dart';
 
 import 'package:smartroll/Screens/dialogue_utils.dart'; // Ensure this path is correct
-import 'package:smartroll/utils/mark_attendance_service.dart';
+import 'package:smartroll/services/mark_attendance_service.dart';
 import 'error_screen.dart'; // Ensure this path is correct
 
 import 'package:smartroll/utils/constants.dart';
 import 'package:smartroll/utils/attendace_data_collector.dart';
-import 'package:smartroll/utils/auth_service.dart';
-import 'package:smartroll/utils/device_id_service.dart'; // Ensure this path is correct
+import 'package:smartroll/services/auth_service.dart';
+import 'package:smartroll/services/device_id_service.dart'; // Ensure this path is correct
 import 'package:smartroll/utils/effects.dart';
 
 // --- Centralized Configuration ---
