@@ -26,92 +26,94 @@ class ErrorScreen extends StatelessWidget {
           child: Image.asset('assets/LOGO.webp', fit: BoxFit.contain),
         ),
       ),
-      body: Center(
-        child: Padding(
-          // Add padding around the content
-          padding: const EdgeInsets.symmetric(horizontal: 30.0, vertical: 20.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Modern Error Icon
-              Icon(
-                Icons.warning_amber_rounded, // A slightly softer warning icon
-                color: Colors.red.shade400, // Use theme's error color
-                size: 70,
-              ),
-              const SizedBox(height: 20),
-
-              // Error Title
-              Text(
-                'Something Went Wrong', // A slightly friendlier title
-                style: textTheme.headlineSmall?.copyWith(
-                  color:
-                      Theme.of(
-                        context,
-                      ).colorScheme.primary, // Keep title white for contrast
-                  fontWeight: FontWeight.w600,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            // Add padding around the content
+            padding: const EdgeInsets.symmetric(horizontal: 30.0, vertical: 20.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Modern Error Icon
+                Icon(
+                  Icons.warning_amber_rounded, // A slightly softer warning icon
+                  color: Colors.red.shade400, // Use theme's error color
+                  size: 70,
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-
-              // Error Message
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: textTheme.bodyLarge?.copyWith(
-                  color: Colors.grey[600], // Lighter grey for message body
-                  height: 1.4, // Improve line spacing for readability
-                ),
-              ),
-              const SizedBox(height: 28), // More space before button
-              // Retry Button (Conditional)
-              if (showRetryButton)
-                OutlinedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    // backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor:
-                        colorScheme.primary, // Text color on primary
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                    textStyle: textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10), //  rounding
-                    ),
-                  ),
-                  icon: const Icon(Icons.refresh_outlined, size: 20),
-                  label: const Text('Try Again'),
-                  onPressed: () {
-                    // Navigate back to SplashScreen to retry the checks
-                    Navigator.pushReplacement(
-                      context,
-                      // Use a fade transition for a smoother feel
-                      PageRouteBuilder(
-                        pageBuilder:
-                            (context, animation, secondaryAnimation) =>
-                                const SplashScreen(),
-                        transitionsBuilder: (
+                const SizedBox(height: 20),
+        
+                // Error Title
+                Text(
+                  'Something Went Wrong', // A slightly friendlier title
+                  style: textTheme.headlineSmall?.copyWith(
+                    color:
+                        Theme.of(
                           context,
-                          animation,
-                          secondaryAnimation,
-                          child,
-                        ) {
-                          return FadeTransition(
-                            opacity: animation,
-                            child: child,
-                          );
-                        },
-                        transitionDuration: const Duration(milliseconds: 300),
-                      ),
-                    );
-                  },
+                        ).colorScheme.primary, // Keep title white for contrast
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-            ],
+                const SizedBox(height: 12),
+        
+                // Error Message
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: textTheme.bodyLarge?.copyWith(
+                    color: Colors.grey[600], // Lighter grey for message body
+                    height: 1.4, // Improve line spacing for readability
+                  ),
+                ),
+                const SizedBox(height: 28), // More space before button
+                // Retry Button (Conditional)
+                if (showRetryButton)
+                  OutlinedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      // backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor:
+                          colorScheme.primary, // Text color on primary
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                      textStyle: textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10), //  rounding
+                      ),
+                    ),
+                    icon: const Icon(Icons.refresh_outlined, size: 20),
+                    label: const Text('Try Again'),
+                    onPressed: () {
+                      // Navigate back to SplashScreen to retry the checks
+                      Navigator.pushReplacement(
+                        context,
+                        // Use a fade transition for a smoother feel
+                        PageRouteBuilder(
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  const SplashScreen(),
+                          transitionsBuilder: (
+                            context,
+                            animation,
+                            secondaryAnimation,
+                            child,
+                          ) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            );
+                          },
+                          transitionDuration: const Duration(milliseconds: 300),
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            ),
           ),
         ),
       ),

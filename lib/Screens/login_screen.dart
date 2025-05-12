@@ -159,66 +159,68 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     final theme = Theme.of(context); // Get theme for colors
 
-    return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
-      body: Stack(
-        alignment: Alignment.center,
-        children: [
-          Center(
-            // Explicitly center the logo column
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ShimmerWidget(
-                  child: Image.asset(
-                    'assets/LOGO.webp',
-                    width: MediaQuery.of(context).size.width * 0.5,
+    return SafeArea(
+      child: Scaffold(
+        backgroundColor: theme.colorScheme.surface,
+        body: Stack(
+          alignment: Alignment.center,
+          children: [
+            Center(
+              // Explicitly center the logo column
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ShimmerWidget(
+                    child: Image.asset(
+                      'assets/LOGO.webp',
+                      width: MediaQuery.of(context).size.width * 0.5,
+                    ),
                   ),
-                ),
-                // Optional: Add space below logo if needed even when button isn't shown
-                // const SizedBox(height: 60), // Adjust as needed
-              ],
-            ),
-          ),
-
-          // --- Retry Button (Positioned at Bottom Center, conditionally visible) ---
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              // Add padding from the bottom edge
-              padding: const EdgeInsets.only(
-                bottom: 100.0,
-              ), // Adjust bottom padding as needed
-              child: AnimatedOpacity(
-                // Use AnimatedOpacity for smooth appearance
-                opacity: _showRetry ? 1.0 : 0.0, // Control visibility
-                duration: const Duration(milliseconds: 300), // Fade duration
-                child:
-                    _showRetry // Only build the button if _showRetry is true
-                        ? OutlinedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: theme.colorScheme.surface,
-                            foregroundColor: theme.colorScheme.primary,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 18,
-                              vertical: 12,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            textStyle: theme.textTheme.labelLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          icon: const Icon(Icons.refresh_rounded, size: 20),
-                          label: const Text('Retry Login'),
-                          onPressed: _initiateLogin,
-                        )
-                        : const SizedBox.shrink(), // Render nothing if not showing retry
+                  // Optional: Add space below logo if needed even when button isn't shown
+                  // const SizedBox(height: 60), // Adjust as needed
+                ],
               ),
             ),
-          ),
-        ],
+      
+            // --- Retry Button (Positioned at Bottom Center, conditionally visible) ---
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                // Add padding from the bottom edge
+                padding: const EdgeInsets.only(
+                  bottom: 150.0,
+                ), // Adjust bottom padding as needed
+                child: AnimatedOpacity(
+                  // Use AnimatedOpacity for smooth appearance
+                  opacity: _showRetry ? 1.0 : 0.0, // Control visibility
+                  duration: const Duration(milliseconds: 300), // Fade duration
+                  child:
+                      _showRetry // Only build the button if _showRetry is true
+                          ? OutlinedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: theme.colorScheme.surface,
+                              foregroundColor: theme.colorScheme.primary,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 18,
+                                vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              textStyle: theme.textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            icon: const Icon(Icons.refresh_rounded, size: 20),
+                            label: const Text('Retry Login'),
+                            onPressed: _initiateLogin,
+                          )
+                          : const SizedBox.shrink(), // Render nothing if not showing retry
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

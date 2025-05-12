@@ -205,12 +205,14 @@ class _SplashScreenState extends State<SplashScreen>
     // UI remains the same
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
-      body: Center(
-        child: ShimmerWidget(
-          // Assuming ShimmerWidget is correctly defined
-          child: Image.asset(
-            'assets/LOGO.webp', // Assuming this asset exists
-            width: MediaQuery.of(context).size.width * 0.5,
+      body: SafeArea(
+        child: Center(
+          child: ShimmerWidget(
+            // Assuming ShimmerWidget is correctly defined
+            child: Image.asset(
+              'assets/LOGO.webp', // Assuming this asset exists
+              width: MediaQuery.of(context).size.width * 0.5,
+            ),
           ),
         ),
       ),

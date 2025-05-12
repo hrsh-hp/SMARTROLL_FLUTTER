@@ -1,12 +1,24 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:app_links/app_links.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'Screens/splash_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  // You might also want to make system bars transparent
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark, // Adjust for your app's theme
+      systemNavigationBarIconBrightness: Brightness.dark, // Adjust
+    ),
+  );
   runApp(const MyApp());
 }
 
@@ -136,7 +148,7 @@ class _MyAppState extends State<MyApp> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           // Looks good, keep as is
           color: const Color(0xFFFFFFFF),
           shape: RoundedRectangleBorder(

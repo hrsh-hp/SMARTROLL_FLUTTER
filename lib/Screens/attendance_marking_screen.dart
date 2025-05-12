@@ -164,7 +164,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
           final timeB = DateFormat("HH:mm").parse(b['start_time']);
           return timeA.compareTo(timeB);
         } catch (e) {
-          return 0; 
+          return 0;
         }
       });
 
@@ -451,7 +451,9 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
           IconButton(icon: const Icon(Icons.logout), onPressed: _handleLogout),
         ],
       ),
-      body: _buildBodyWithDividers(), // Call the new body builder
+      body: SafeArea(
+        child: _buildBodyWithDividers(),
+      ), // Call the new body builder
     );
   }
 
@@ -560,7 +562,6 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
             as Map<String, dynamic>?; // Get attendance map safely
     // Determine status based on the new structure
     final bool isMarked = attendanceData?['is_present'] ?? false;
-    final bool isManuallyMarked = attendanceData?['manual'] ?? false;
     final bool isRegulizationRequested =
         attendanceData?['regulization_request'] ?? false;
 
@@ -670,11 +671,8 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
                 const SizedBox(width: 2), // Space before chip
                 // --- Right: Status Chip ---
                 // (Keep your existing logic for showing the chip)
-                if (isMarked || isManuallyMarked || isRegulizationRequested)
-                  _buildAttendanceStatusChip(
-                    isMarked || isManuallyMarked,
-                    isRegulizationRequested,
-                  ),
+                if (isMarked || isRegulizationRequested)
+                  _buildAttendanceStatusChip(isMarked, isRegulizationRequested),
               ],
             ),
             const SizedBox(height: 8), // Space after top row
@@ -739,7 +737,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
               value: sessionDate ?? 'N/A',
             ), // sessionDate needs reformatting
             // --- Action Buttons (Keep existing logic) ---
-            if (!isMarked && !isManuallyMarked) ...[
+            if (!isMarked ) ...[
               const SizedBox(height: 16),
               _buildActionOrStatusWidget(
                 activeStatus,

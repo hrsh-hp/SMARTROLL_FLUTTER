@@ -18,7 +18,6 @@ class _SlideGradientTransform extends GradientTransform {
     return Matrix4.translationValues(dx * bounds.width, 0.0, 0.0);
   }
 }
-// ---
 
 /// A widget that applies a one-directional shimmer effect to its child.
 class ShimmerWidget extends StatefulWidget {
