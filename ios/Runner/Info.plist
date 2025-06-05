@@ -68,7 +68,7 @@
 				<string>Editor</string>
 				<key>CFBundleURLName</key>
 				<!-- Optional: Use your bundle ID or a descriptive name -->
-				<string>com.live.smartroll</string>
+				<string>com.smartroll.app</string>
 				<key>CFBundleURLSchemes</key>
 				<array>
 					<!-- Your custom scheme -->

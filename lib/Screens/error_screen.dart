@@ -30,33 +30,32 @@ class ErrorScreen extends StatelessWidget {
         child: Center(
           child: Padding(
             // Add padding around the content
-            padding: const EdgeInsets.symmetric(horizontal: 30.0, vertical: 20.0),
+            padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Modern Error Icon
                 Icon(
-                  Icons.warning_amber_rounded, // A slightly softer warning icon
-                  color: Colors.red.shade400, // Use theme's error color
+                  Icons.warning_amber_rounded, 
+                  color: Theme.of(context).colorScheme.error,
                   size: 70,
                 ),
                 const SizedBox(height: 20),
-        
+
                 // Error Title
                 Text(
-                  'Something Went Wrong', // A slightly friendlier title
+                  'Something Went Wrong', 
                   style: textTheme.headlineSmall?.copyWith(
                     color:
                         Theme.of(
                           context,
-                        ).colorScheme.primary, // Keep title white for contrast
+                        ).colorScheme.primary, 
                     fontWeight: FontWeight.w600,
                   ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
-        
+
                 // Error Message
                 Text(
                   message,
