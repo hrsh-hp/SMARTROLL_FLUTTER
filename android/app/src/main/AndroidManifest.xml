@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- Add Microphone Permission -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Add Speaker Permission -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <application
         android:label="SmartRoll"
         android:name="${applicationName}"

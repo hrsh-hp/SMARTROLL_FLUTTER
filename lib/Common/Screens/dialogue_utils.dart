@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:app_settings/app_settings.dart';
 import 'package:flutter/services.dart';
-import 'package:smartroll/Common/Screens/login_screen.dart';
 import 'package:smartroll/Common/services/auth_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
