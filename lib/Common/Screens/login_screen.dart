@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:smartroll/utils/constants.dart';
-import 'package:smartroll/services/device_id_service.dart';
-import 'package:smartroll/utils/effects.dart';
+import 'package:smartroll/Common/utils/constants.dart';
+import 'package:smartroll/Common/services/device_id_service.dart';
+import 'package:smartroll/Common/utils/effects.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -91,6 +91,7 @@ class _LoginScreenState extends State<LoginScreen>
 
     try {
       final deviceId = await deviceIdService.getUniqueDeviceId();
+      debugPrint("Device ID: $deviceId");
       if (!mounted) return;
 
       final encodedDeviceId = base64Encode(utf8.encode(deviceId));
@@ -181,7 +182,7 @@ class _LoginScreenState extends State<LoginScreen>
                 ],
               ),
             ),
-      
+
             // --- Retry Button (Positioned at Bottom Center, conditionally visible) ---
             Align(
               alignment: Alignment.bottomCenter,

@@ -5,14 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http; // For MediaType
 import 'package:location/location.dart'; // Keep for LocationData type
 import 'package:app_settings/app_settings.dart';
-import 'package:smartroll/Screens/dialogue_utils.dart';
-import 'package:smartroll/Screens/login_screen.dart';
+import 'package:smartroll/Common/Screens/dialogue_utils.dart';
+import 'package:smartroll/Common/Screens/login_screen.dart';
 
 // Import necessary services and utilities used by the logic
-import 'package:smartroll/utils/attendace_data_collector.dart';
-import 'package:smartroll/utils/constants.dart';
-import 'package:smartroll/services/auth_service.dart';
-import 'package:smartroll/services/device_id_service.dart';
+import 'package:smartroll/Student/utils/attendace_data_collector.dart';
+import 'package:smartroll/Common/utils/constants.dart';
+import 'package:smartroll/Common/services/auth_service.dart';
+import 'package:smartroll/Common/services/device_id_service.dart';
 
 class MarkAttendaceService {
   // Services needed by the handler

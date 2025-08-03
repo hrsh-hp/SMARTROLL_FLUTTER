@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:app_settings/app_settings.dart';
+import 'package:flutter/services.dart';
+import 'package:smartroll/Common/Screens/login_screen.dart';
+import 'package:smartroll/Common/services/auth_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Utility class for showing common dialogs and bottom sheets.
@@ -278,6 +281,79 @@ class DialogUtils {
         // --- End PopScope ---
       },
     );
+  }
+
+  static Future<void> showLogoutConfirmationDialog(BuildContext context) async {
+    // Show the confirmation dialog and wait for the user's choice.
+    final bool? didConfirm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false, // User must make a choice
+      builder: (BuildContext dialogContext) {
+        final theme = Theme.of(dialogContext);
+
+        return AlertDialog(
+          backgroundColor: theme.colorScheme.surface, // Dark background
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          title: Text(
+            'Confirm Logout',
+            style: TextStyle(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            'Are you sure you want to log out and close the app?',
+            style: TextStyle(color: Colors.grey[700]),
+          ),
+          actions: <Widget>[
+            // No / Cancel Button
+            TextButton(
+              child: Text('Cancel', style: TextStyle(color: Colors.grey[400])),
+              onPressed: () {
+                Navigator.of(
+                  dialogContext,
+                ).pop(false); // Return false when cancelled
+              },
+            ),
+            // Yes / Logout Button
+            TextButton(
+              child: Text(
+                'Logout',
+                style: TextStyle(color: theme.colorScheme.error),
+              ), // Use error color for emphasis
+              onPressed: () {
+                Navigator.of(
+                  dialogContext,
+                ).pop(true); // Return true when confirmed
+              },
+            ),
+          ],
+        );
+      },
+    );
+
+    // If the user confirmed (dialog returned true), perform the logout.
+    if (didConfirm == true) {
+      try {
+        // Assuming AuthService has a clearTokens method that uses secureStorage
+        await AuthService().clearTokens();
+      } catch (e) {
+        //debugPrint("Error clearing secure storage during logout: $e");
+        // Decide if you still want to exit or show an error
+      }
+
+      // If the context is still valid, navigate the user to the LoginScreen
+      // and remove all previous routes from the stack.
+      await SystemNavigator.pop();
+      // if (context.mounted) {
+      //   Navigator.of(context).pushAndRemoveUntil(
+      //     MaterialPageRoute(builder: (context) => const LoginScreen()),
+      //     (route) => false,
+      //   );
+      // }
+    }
   }
 } // End of DialogUtils Class
 

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:smartroll/utils/constants.dart'; // Assuming backendBaseUrl is here
+import 'package:smartroll/Common/utils/constants.dart'; // Assuming backendBaseUrl is here
 
 // Enum to represent the result of the version check
 enum VersionStatus {

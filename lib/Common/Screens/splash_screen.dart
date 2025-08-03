@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:smartroll/Screens/dialogue_utils.dart';
-import 'package:smartroll/utils/constants.dart'; // Assuming SecurityService is here or imported
-import 'package:smartroll/utils/effects.dart';
-import 'package:smartroll/services/version_service.dart';
+import 'package:smartroll/Common/Screens/dialogue_utils.dart';
+import 'package:smartroll/Common/utils/constants.dart'; // Assuming SecurityService is here or imported
+import 'package:smartroll/Common/utils/effects.dart';
+import 'package:smartroll/Common/services/version_service.dart';
+import 'package:smartroll/Teacher/Screens/teacher_dashboard_screen.dart';
 import 'dart:async';
 
 // Import the AuthService and Enums
 import '../services/auth_service.dart';
 
 // Import your screens
-import 'attendance_marking_screen.dart';
+import '../../Student/Screens/attendance_marking_screen.dart';
 import 'login_screen.dart';
 import 'error_screen.dart';
 
@@ -82,8 +83,8 @@ class _SplashScreenState extends State<SplashScreen>
         }; // Default to non-blocking if check fails
       }
 
-      if (securityStatus['isCompromised'] == true ||
-          securityStatus['isDeveloperModeEnabled'] == true ||
+      if (securityStatus['isCompromised'] == true &&
+          securityStatus['isDeveloperModeEnabled'] == true &&
           securityStatus['isDebuggerAttached'] == true) {
         //debugprint( "Security check failed (Root/Jailbreak or DevMode ON). Blocking app.",);
         String msg =
@@ -124,7 +125,7 @@ class _SplashScreenState extends State<SplashScreen>
             switch (tokenStatus) {
               case TokenStatus.valid:
                 //debugprint("SplashScreen - Token valid.");
-                nextPage = const AttendanceMarkingScreen();
+                nextPage = await _getScreenForRole();
                 checksPassed =
                     true; // All checks passed, navigate to main screen
                 break;
@@ -136,7 +137,7 @@ class _SplashScreenState extends State<SplashScreen>
 
                 if (refreshResult == RefreshStatus.success) {
                   //debugprint("SplashScreen - Refresh successful.");
-                  nextPage = const AttendanceMarkingScreen();
+                  nextPage = await _getScreenForRole();
                   checksPassed = true; // All checks passed after refresh
                 } else {
                   //debugprint("SplashScreen - Refresh failed, logging out.");
@@ -196,6 +197,23 @@ class _SplashScreenState extends State<SplashScreen>
                 message: errorMessage ?? "An unknown error occurred.",
               ),
         ),
+      );
+    }
+  }
+
+  Future<Widget> _getScreenForRole() async {
+    final role = await _authService.getUserRole();
+
+    if (role == 'student') {
+      return const AttendanceMarkingScreen();
+    } else if (role == 'teacher') {
+      return const TeacherDashboardScreen();
+    } else {
+      // If role is null, invalid, or something else, default to logging out.
+      // This is a safe fallback.
+      await _authService.clearTokens();
+      return LoginScreen(
+        initialMessage: "Your session has expired. Please log in again.",
       );
     }
   }

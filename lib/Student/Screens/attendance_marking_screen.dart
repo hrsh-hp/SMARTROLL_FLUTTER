@@ -4,15 +4,15 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
 
-import 'package:smartroll/Screens/dialogue_utils.dart'; // Ensure this path is correct
-import 'package:smartroll/services/mark_attendance_service.dart';
-import 'error_screen.dart'; // Ensure this path is correct
+import 'package:smartroll/Common/Screens/dialogue_utils.dart'; // Ensure this path is correct
+import 'package:smartroll/Student/services/mark_attendance_service.dart';
+import '../../Common/Screens/error_screen.dart'; // Ensure this path is correct
 
-import 'package:smartroll/utils/constants.dart';
-import 'package:smartroll/utils/attendace_data_collector.dart';
-import 'package:smartroll/services/auth_service.dart';
-import 'package:smartroll/services/device_id_service.dart'; // Ensure this path is correct
-import 'package:smartroll/utils/effects.dart';
+import 'package:smartroll/Common/utils/constants.dart';
+import 'package:smartroll/Student/utils/attendace_data_collector.dart';
+import 'package:smartroll/Common/services/auth_service.dart';
+import 'package:smartroll/Common/services/device_id_service.dart'; // Ensure this path is correct
+import 'package:smartroll/Common/utils/effects.dart';
 
 // --- Centralized Configuration ---
 const String _backendBaseUrl = backendBaseUrl;
@@ -292,87 +292,6 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
     );
   }
 
-  // // --- LOGOUT ---
-  Future<void> _handleLogout() async {
-    // --- Show Confirmation Dialog ---
-    final bool? confirmLogout = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false, // User must choose an action
-      builder: (BuildContext dialogContext) {
-        final theme = Theme.of(context); // Get theme for styling
-
-        return AlertDialog(
-          backgroundColor: theme.colorScheme.surface, // Dark background
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          title: Text(
-            'Confirm Logout',
-            style: TextStyle(
-              color: theme.colorScheme.primary,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Text(
-            'Are you sure you want to log out and exit the app?',
-            style: TextStyle(color: Colors.grey[700]),
-          ),
-          actions: <Widget>[
-            // No / Cancel Button
-            TextButton(
-              child: Text('Cancel', style: TextStyle(color: Colors.grey[400])),
-              onPressed: () {
-                Navigator.of(
-                  dialogContext,
-                ).pop(false); // Return false when cancelled
-              },
-            ),
-            // Yes / Logout Button
-            TextButton(
-              child: Text(
-                'Logout',
-                style: TextStyle(color: theme.colorScheme.error),
-              ), // Use error color for emphasis
-              onPressed: () {
-                Navigator.of(
-                  dialogContext,
-                ).pop(true); // Return true when confirmed
-              },
-            ),
-          ],
-        );
-      },
-    );
-    // --- End Confirmation Dialog ---
-
-    // --- Process Confirmation ---
-    // Check if the dialog returned true (meaning user confirmed)
-    if (confirmLogout == true) {
-      //debugPrint("User confirmed logout. Clearing data and exiting.");
-
-      // 1. Clear Secure Storage (using your AuthService or directly)
-      try {
-        // Assuming AuthService has a clearTokens method that uses secureStorage
-        await _authService.clearTokens();
-        // OR if accessing directly:
-        // await _storage.deleteAll();
-        //debugPrint("Secure storage cleared.");
-      } catch (e) {
-        //debugPrint("Error clearing secure storage during logout: $e");
-        // Decide if you still want to exit or show an error
-      }
-
-      // 2. Close the App
-      // Use SystemNavigator.pop() to exit the application.
-      // Note: This might be discouraged on iOS by Apple's guidelines for
-      // normal app flows, but it's often acceptable for a logout/exit action.
-      await SystemNavigator.pop();
-    } else {
-      //debugPrint("User cancelled logout.");
-      // Do nothing if user cancelled
-    }
-  }
-
   void _handleFetchError(String message) {
     if (mounted) {
       setState(() {
@@ -448,7 +367,12 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         //           : () => _fetchTimetableData(showLoading: true),
         // ),
         actions: [
-          IconButton(icon: const Icon(Icons.logout), onPressed: _handleLogout),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () {
+              DialogUtils.showLogoutConfirmationDialog(context);
+            },
+          ),
         ],
       ),
       body: SafeArea(
@@ -737,7 +661,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
               value: sessionDate ?? 'N/A',
             ), // sessionDate needs reformatting
             // --- Action Buttons (Keep existing logic) ---
-            if (!isMarked ) ...[
+            if (!isMarked) ...[
               const SizedBox(height: 16),
               _buildActionOrStatusWidget(
                 activeStatus,

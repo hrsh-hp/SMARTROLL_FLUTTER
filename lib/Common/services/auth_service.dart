@@ -173,9 +173,20 @@ class AuthService {
     try {
       await _storage.delete(key: 'accessToken');
       await _storage.delete(key: 'refreshToken');
+      await _storage.delete(key: 'role');
       //debugprint("AuthService - Cleared tokens.");
     } catch (e) {
       //debugprint("AuthService - Error clearing tokens: $e");
+    }
+  }
+
+  /// Reads the user's role from secure storage.
+  Future<String?> getUserRole() async {
+    try {
+      return await _storage.read(key: 'role');
+    } catch (e) {
+      //debugprint("AuthService - Error reading role: $e");
+      return null;
     }
   }
 
