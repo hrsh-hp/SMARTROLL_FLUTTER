@@ -63,7 +63,7 @@ class SessionService {
       errorMessage = e.toString();
       sessionState.value = SessionState.error;
       await endSession();
-      throw e;
+      rethrow;
     }
   }
 

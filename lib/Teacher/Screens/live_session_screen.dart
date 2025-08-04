@@ -21,8 +21,8 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
   final SocketService _socketService = SocketService.instance;
 
   late TabController _tabController;
-  List<Map<String, dynamic>> _defaultStudents = [];
-  List<Map<String, dynamic>> _manualRequests = [];
+  final List<Map<String, dynamic>> _defaultStudents = [];
+  final List<Map<String, dynamic>> _manualRequests = [];
   int _activeStudentCount = 0;
   bool _isLoading = true;
   String? _errorMessage;
@@ -194,7 +194,9 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
 
   @override
   void dispose() {
-    for (var sub in _subscriptions) sub.cancel();
+    for (var sub in _subscriptions) {
+      sub.cancel();
+    }
     _socketService.disconnect();
     _sessionService.endSession();
     _tabController.dispose();
@@ -304,21 +306,28 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
 
   Widget _buildContent(Widget Function() contentBuilder) {
     if (_isLoading) return const ListLoadingShimmer();
-    if (_errorMessage != null)
+    if (_errorMessage != null) {
       return Center(
         child: Text(
           'Error: $_errorMessage',
           style: const TextStyle(color: Colors.red),
         ),
       );
+    }
     return contentBuilder();
   }
 
   // --- NEW MODERN UI BUILDERS ---
 
   Widget _buildDefaultStudentList() {
-    if (_defaultStudents.isEmpty)
-      return const Center(child: Text('No students marked present.'));
+    if (_defaultStudents.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.groups_2,
+        title: 'Waiting for Students',
+        message:
+            'As students mark their attendance, they will appear here in real-time.',
+      );
+    }
 
     return ListView.builder(
       padding: const EdgeInsets.all(8),
@@ -426,8 +435,14 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
   }
 
   Widget _buildManualRequestList() {
-    if (_manualRequests.isEmpty)
-      return const Center(child: Text('No manual attendance requests.'));
+    if (_manualRequests.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.inbox_outlined,
+        title: 'No Manual Requests',
+        message:
+            'Requests from students for manual attendance will show up here.',
+      );
+    }
     return ListView.builder(
       padding: const EdgeInsets.all(8),
       itemCount: _manualRequests.length,
@@ -465,6 +480,44 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
           ),
         );
       },
+    );
+  }
+
+  Widget _buildEmptyState({
+    required IconData icon,
+    required String title,
+    required String message,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 64,
+              color: Colors.grey[400], // A soft, muted color for the icon
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

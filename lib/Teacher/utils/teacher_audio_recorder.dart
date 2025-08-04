@@ -15,10 +15,14 @@ class TeacherAudioRecorder {
   static const _numChannels = 1;
   static const _bitDepth = 16;
 
+  static const int _bytesPerSecond =
+      _sampleRate * _numChannels * (_bitDepth ~/ 8);
+
   /// Starts recording and returns a stream of WAV audio data chunks.
   /// Each item in the stream is a complete WAV file in bytes.
   Stream<Uint8List> startRecording() {
     final controller = StreamController<Uint8List>();
+    final List<int> buffer = []; // temporary buffer to aggregate chunks
 
     _audioRecorder
         .startStream(
@@ -31,9 +35,19 @@ class TeacherAudioRecorder {
         .then((stream) {
           // Listen to the raw audio stream from the microphone
           _audioStreamSubscription = stream.listen((data) {
-            if (!controller.isClosed) {
-              // For each chunk of raw data, create a valid WAV blob and add it to our stream
-              controller.add(_createWavBlob(data));
+            buffer.addAll(data);
+            // Process the buffer as long as it contains at least one full second of audio
+            while (buffer.length >= _bytesPerSecond) {
+              // Slice off exactly one second's worth of data from the start of the buffer
+              final chunkToSend = buffer.sublist(0, _bytesPerSecond);
+
+              // Remove the sliced data from the buffer
+              buffer.removeRange(0, _bytesPerSecond);
+
+              // Create the WAV blob and add it to our output stream
+              if (!controller.isClosed) {
+                controller.add(_createWavBlob(chunkToSend));
+              }
             }
           });
         })
