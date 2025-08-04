@@ -354,6 +354,69 @@ class DialogUtils {
       // }
     }
   }
+
+  static void showSessionLoadingDialog(
+    BuildContext context, {
+    String message = "Preparing session...",
+  }) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierLabel: 'Loading',
+      transitionDuration: const Duration(milliseconds: 200), // Fast fade-in
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return Center(
+          child: Container(
+            padding: const EdgeInsets.all(24.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16.0),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: CircularProgressIndicator(strokeWidth: 3.0),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Colors.black87,
+                    decoration:
+                        TextDecoration
+                            .none, // Remove underline from dialog text
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      // Use a fade transition for a smoother appearance
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: animation.drive(Tween(begin: 0.9, end: 1.0)),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
 } // End of DialogUtils Class
 
 // --- Private StatefulWidget for Manual Marking Dialog Content (Light Theme) ---

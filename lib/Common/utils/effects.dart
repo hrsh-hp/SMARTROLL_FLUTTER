@@ -258,3 +258,129 @@ class _LoadingShimmerState extends State<LoadingShimmer>
     );
   }
 }
+
+/// A custom shimmer loading widget specifically for the student attendance list.
+class ListLoadingShimmer extends StatefulWidget {
+  const ListLoadingShimmer({super.key});
+
+  @override
+  State<ListLoadingShimmer> createState() => _ListLoadingShimmerState();
+}
+
+class _ListLoadingShimmerState extends State<ListLoadingShimmer>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _shimmerController;
+
+  // Use consistent colors with your other shimmer widgets
+  final Color _shimmerBaseColor = Colors.grey.shade200;
+  final Color _shimmerHighlightColor = Colors.grey.shade100;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
+  }
+
+  /// Builds a single placeholder box with the animated shimmer gradient.
+  Widget _buildShimmerBox({required double height, double? width}) {
+    return AnimatedBuilder(
+      animation: _shimmerController,
+      builder: (context, child) {
+        return Container(
+          height: height,
+          width: width,
+          decoration: BoxDecoration(
+            color: _shimmerBaseColor,
+            gradient: LinearGradient(
+              colors: [
+                _shimmerBaseColor,
+                _shimmerHighlightColor,
+                _shimmerBaseColor,
+              ],
+              stops: const [
+                0.4,
+                0.5,
+                0.6,
+              ], // A tighter, faster-moving shimmer band
+              transform: _SlideGradientTransform(
+                slidePercent: _shimmerController.value,
+                patternWidth: 0.5,
+              ),
+            ),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Builds a row that mimics the DataTable header.
+  Widget _buildPlaceholderHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
+      child: Row(
+        children: [
+          Expanded(flex: 4, child: _buildShimmerBox(height: 14)),
+          const SizedBox(width: 20),
+          Expanded(flex: 1, child: _buildShimmerBox(height: 14)),
+          const SizedBox(width: 20),
+          Expanded(flex: 2, child: _buildShimmerBox(height: 14)),
+          const SizedBox(width: 20),
+          Expanded(flex: 1, child: _buildShimmerBox(height: 14)),
+          const SizedBox(width: 20),
+          Expanded(flex: 2, child: _buildShimmerBox(height: 14)),
+        ],
+      ),
+    );
+  }
+
+  /// Builds a row that mimics a single student data row in the DataTable.
+  Widget _buildPlaceholderRow() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
+      child: Row(
+        children: [
+          // Placeholder for Student Name
+          Expanded(flex: 4, child: _buildShimmerBox(height: 20)),
+          const SizedBox(width: 20),
+          // Placeholder for P/A Checkbox
+          _buildShimmerBox(height: 24, width: 24),
+          const SizedBox(width: 20),
+          // Placeholder for GPS Distance
+          Expanded(flex: 2, child: _buildShimmerBox(height: 20)),
+          const SizedBox(width: 20),
+          // Placeholder for NCC
+          Expanded(flex: 1, child: _buildShimmerBox(height: 20)),
+          const SizedBox(width: 20),
+          // Placeholder for Magnitude
+          Expanded(flex: 2, child: _buildShimmerBox(height: 20)),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _buildPlaceholderHeader(),
+        const Divider(height: 1),
+        Expanded(
+          child: ListView.builder(
+            itemCount: 8, // Display 8 placeholder rows
+            itemBuilder: (context, index) => _buildPlaceholderRow(),
+          ),
+        ),
+      ],
+    );
+  }
+}

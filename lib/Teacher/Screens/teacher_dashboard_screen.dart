@@ -720,10 +720,9 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
     }
 
     // Show a loading dialog for better UX
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
+    DialogUtils.showSessionLoadingDialog(
+      context,
+      message: "Creating live session...",
     );
 
     try {
