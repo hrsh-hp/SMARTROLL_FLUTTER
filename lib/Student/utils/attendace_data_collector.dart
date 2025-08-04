@@ -43,13 +43,58 @@ class AttendanceDataCollector {
   final Location _location = Location();
   final AudioRecorder _audioRecorder = AudioRecorder();
 
+  /// Checks and requests necessary permissions (Location & Microphone).
+  static Future<AttendanceDataStatus> checkAndRequestPermissions({
+    String role = "student",
+  }) async {
+    List<ph.Permission> permissionsToRequest = [];
+    if (role == 'student') {
+      permissionsToRequest.add(ph.Permission.location);
+      permissionsToRequest.add(ph.Permission.microphone);
+    } else if (role == 'teacher') {
+      permissionsToRequest.add(ph.Permission.microphone);
+    }
+
+    if (permissionsToRequest.isEmpty) {
+      return AttendanceDataStatus.success;
+    }
+
+    Map<ph.Permission, ph.PermissionStatus> statuses =
+        await permissionsToRequest.request();
+
+    if (statuses.containsKey(ph.Permission.location)) {
+      var locationStatus =
+          statuses[ph.Permission.location] ?? ph.PermissionStatus.denied;
+      if (locationStatus.isPermanentlyDenied) {
+        return AttendanceDataStatus.locationPermissionDeniedForever;
+      }
+      if (!locationStatus.isGranted) {
+        return AttendanceDataStatus.locationPermissionDenied;
+      }
+    }
+
+    if (statuses.containsKey(ph.Permission.microphone)) {
+      var microphoneStatus =
+          statuses[ph.Permission.microphone] ?? ph.PermissionStatus.denied;
+      if (microphoneStatus.isPermanentlyDenied) {
+        return AttendanceDataStatus.microphonePermissionDeniedForever;
+      }
+      if (!microphoneStatus.isGranted) {
+        return AttendanceDataStatus.microphonePermissionDenied;
+      }
+    }
+
+    return AttendanceDataStatus.success;
+  }
+
   /// Collects location and records audio concurrently.
   /// Handles permissions and service checks internally.
   Future<AttendanceDataResult> collectData({
     Duration recordingDuration = const Duration(seconds: 10),
+    String role = "student",
   }) async {
     // --- 1. Check & Request Permissions ---
-    final permissionStatus = await _checkAndRequestPermissions();
+    final permissionStatus = await checkAndRequestPermissions(role: role);
     if (permissionStatus != AttendanceDataStatus.success) {
       return AttendanceDataResult(
         status: permissionStatus,
@@ -121,32 +166,6 @@ class AttendanceDataCollector {
       // Ensure recorder is stopped and disposed if still active
       await _disposeRecorder();
     }
-  }
-
-  /// Checks and requests necessary permissions (Location & Microphone).
-  Future<AttendanceDataStatus> _checkAndRequestPermissions() async {
-    Map<ph.Permission, ph.PermissionStatus> statuses =
-        await [ph.Permission.location, ph.Permission.microphone].request();
-
-    var locationStatus =
-        statuses[ph.Permission.location] ?? ph.PermissionStatus.denied;
-    if (locationStatus.isPermanentlyDenied) {
-      return AttendanceDataStatus.locationPermissionDeniedForever;
-    }
-    if (!locationStatus.isGranted) {
-      return AttendanceDataStatus.locationPermissionDenied;
-    }
-
-    var microphoneStatus =
-        statuses[ph.Permission.microphone] ?? ph.PermissionStatus.denied;
-    if (microphoneStatus.isPermanentlyDenied) {
-      return AttendanceDataStatus.microphonePermissionDeniedForever;
-    }
-    if (!microphoneStatus.isGranted) {
-      return AttendanceDataStatus.microphonePermissionDenied;
-    }
-
-    return AttendanceDataStatus.success;
   }
 
   /// Internal helper to get location, including service check and mock detection.

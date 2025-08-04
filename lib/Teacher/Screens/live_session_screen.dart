@@ -1,7 +1,7 @@
 // lib/Teacher/Screens/live_session_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:smartroll/Teacher/services/session_service.dart'; 
+import 'package:smartroll/Teacher/services/session_service.dart';
 
 class LiveSessionScreen extends StatefulWidget {
   // This screen receives the full session data from the API
@@ -15,6 +15,15 @@ class LiveSessionScreen extends StatefulWidget {
 
 class _LiveSessionScreenState extends State<LiveSessionScreen> {
   final SessionService _sessionService = SessionService.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    // --- CHANGE 1: START THE REAL AUDIO STREAM ---
+    // When this screen becomes active, we start the microphone recording stream.
+    debugPrint("LiveSessionScreen is now active. Starting real audio stream.");
+    _sessionService.startRealAudioStream();
+  }
 
   @override
   void dispose() {
@@ -32,7 +41,15 @@ class _LiveSessionScreenState extends State<LiveSessionScreen> {
     final studentCount = widget.sessionData['student_count'];
 
     return Scaffold(
-      appBar: AppBar(title: Text(subjectName, overflow: TextOverflow.ellipsis)),
+      appBar: AppBar(
+        title: Text(subjectName, overflow: TextOverflow.ellipsis),
+        actions: const [
+          Padding(
+            padding: EdgeInsets.only(right: 16.0),
+            child: Icon(Icons.mic, color: Colors.red),
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(

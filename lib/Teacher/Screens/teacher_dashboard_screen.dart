@@ -10,6 +10,9 @@ import 'package:smartroll/Teacher/Screens/live_session_screen.dart';
 import 'package:smartroll/Teacher/services/session_service.dart';
 import 'package:smartroll/Teacher/utils/teacher_data_provider.dart';
 
+import 'package:smartroll/Student/utils/attendace_data_collector.dart';
+import 'package:app_settings/app_settings.dart';
+
 class TeacherDashboardScreen extends StatefulWidget {
   const TeacherDashboardScreen({super.key});
 
@@ -672,6 +675,42 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
     BuildContext context,
     Map<String, dynamic> lecture,
   ) async {
+    // --- 1. Check Permissions ---
+    final permissionStatus =
+        await AttendanceDataCollector.checkAndRequestPermissions(
+          role: 'teacher',
+        );
+
+    if (!mounted) return;
+
+    if (permissionStatus != AttendanceDataStatus.success) {
+      String message = 'Microphone permission is required to start a session.';
+      if (permissionStatus ==
+          AttendanceDataStatus.microphonePermissionDeniedForever) {
+        DialogUtils.showPermissionSettingsSheet(
+          context: context,
+          title: 'Microphone Permission',
+          content:
+              'Microphone permission has been permanently denied. Please enable it in app settings to start a session.',
+          settingsType: AppSettingsType.settings,
+          onErrorSnackbar: (msg, {isError = true}) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(msg),
+                backgroundColor: isError ? Colors.red : Colors.green,
+              ),
+            );
+          },
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: Colors.red),
+        );
+      }
+      return; // Stop the process if permissions are not granted
+    }
+
+    // --- 2. Proceed if Permissions are Granted ---
     final classroomSlug = lecture['classroom']?['slug'];
     if (classroomSlug == null) {
       ScaffoldMessenger.of(context).showSnackBar(

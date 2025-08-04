@@ -1,10 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:smartroll/Common/utils/constants.dart'; // For secureStorage and backendBaseUrl
+import 'package:smartroll/Common/utils/constants.dart';
+import 'package:smartroll/Teacher/utils/teacher_audio_recorder.dart'; // For secureStorage and backendBaseUrl
 
 // Enum to represent the possible states of a session
 enum SessionState { none, starting, active, error }
@@ -15,6 +17,9 @@ class SessionService {
   static final SessionService instance = SessionService._privateConstructor();
 
   final AudioPlayer _audioPlayer = AudioPlayer();
+
+  final TeacherAudioRecorder _audioRecorder = TeacherAudioRecorder();
+  StreamSubscription<List<int>>? _audioDataSubscription;
 
   // ValueNotifier will notify listeners (like your UI) when the state changes
   final ValueNotifier<SessionState> sessionState = ValueNotifier(
@@ -67,12 +72,46 @@ class SessionService {
       errorMessage = e.toString();
       sessionState.value = SessionState.error;
       await endSession(); // Clean up resources on failure
-      throw e;
+      rethrow;
     }
+  }
+
+  void startRealAudioStream() {
+    // Ensure any previous stream is cancelled
+    stopRealAudioStream();
+
+    final audioStream = _audioRecorder.startRecording();
+
+    _audioDataSubscription = audioStream.listen(
+      (audioChunk) {
+        // THIS IS WHERE YOU SEND THE CHUNK VIA SOCKET.IO
+        debugPrint(
+          "🎤 [REAL] Got audio chunk of size: ${audioChunk.length} bytes. Sending to backend...",
+        );
+        // Example: socket.emit('teacher_audio_chunk', audioChunk);
+      },
+      onError: (error) {
+        debugPrint("Error in audio stream: $error");
+        // Optionally, handle the error (e.g., try to restart the stream)
+      },
+      onDone: () {
+        debugPrint("Audio stream finished.");
+      },
+    );
+    debugPrint("✅ Real audio stream started.");
+  }
+
+  /// Stops the real audio stream.
+  void stopRealAudioStream() {
+    // Cancelling the subscription will trigger the cleanup in TeacherAudioRecorder
+    _audioDataSubscription?.cancel();
+    _audioDataSubscription = null;
+    debugPrint("⏹️ Real audio stream stopped.");
   }
 
   /// Ends the current session and stops all related activities.
   Future<void> endSession() async {
+    stopRealAudioStream();
     // Check if the player is still active before trying to stop it.
     if (_audioPlayer.playing) {
       await _audioPlayer.stop();
