@@ -95,6 +95,11 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
   // --- Data Handling Logic ---
   void _onDefaultStudentReceived(Map<String, dynamic> student) {
     if (!mounted) return;
+
+    final double ncc = (student['ncc'] as num?)?.toDouble() ?? 0.0;
+    final double magnitude = (student['magnitude'] as num?)?.toDouble() ?? 0.0;
+    student['isSuspicious'] = (ncc < 0.5 || magnitude < 0.02);
+
     setState(() {
       _isLoading = false;
       _errorMessage = null;
@@ -104,11 +109,30 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
       if (index != -1) {
         _defaultStudents[index] = student;
       } else {
-        _defaultStudents.insert(0, student);
+        _defaultStudents.add(student);
       }
       // Ensure student is removed from manual list if they were just approved
       _manualRequests.removeWhere((r) => r['slug'] == student['slug']);
+      _sortDefaultStudents();
       _activeStudentCount = _defaultStudents.length;
+    });
+  }
+
+  void _sortDefaultStudents() {
+    _defaultStudents.sort((a, b) {
+      final bool aIsSuspicious = a['isSuspicious'] ?? false;
+      final bool bIsSuspicious = b['isSuspicious'] ?? false;
+
+      if (aIsSuspicious && !bIsSuspicious) {
+        return -1; // a comes first
+      } else if (!aIsSuspicious && bIsSuspicious) {
+        return 1; // b comes first
+      } else {
+        // Optional: sort by name if suspicion status is the same
+        final String nameA = a['student']?['profile']?['name'] ?? '';
+        final String nameB = b['student']?['profile']?['name'] ?? '';
+        return nameA.compareTo(nameB);
+      }
     });
   }
 
@@ -295,17 +319,32 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
   Widget _buildDefaultStudentList() {
     if (_defaultStudents.isEmpty)
       return const Center(child: Text('No students marked present.'));
+
     return ListView.builder(
       padding: const EdgeInsets.all(8),
       itemCount: _defaultStudents.length,
       itemBuilder: (context, index) {
         final student = _defaultStudents[index];
+        final bool isSuspicious = student['isSuspicious'] ?? false;
+
+        final double ncc = (student['ncc'] as num?)?.toDouble() ?? 0.0;
+        final double magnitude =
+            (student['magnitude'] as num?)?.toDouble() ?? 0.0;
+
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-          elevation: 1.5,
+          // --- ENHANCED STYLING FOR SUSPICIOUS CARDS ---
+          elevation: isSuspicious ? 4.0 : 1.5,
+          color: Colors.white, // Subtle red background tint
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
+            // A prominent red border that is impossible to miss
+            side: BorderSide(
+              color: isSuspicious ? Colors.red.shade300 : Colors.transparent,
+              width: 3,
+            ),
           ),
+          // --- END ENHANCED STYLING ---
           child: Padding(
             padding: const EdgeInsets.all(12.0),
             child: Column(
@@ -333,13 +372,22 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
                     ),
                   ],
                 ),
-                const Divider(height: 16),
+
+                const Divider(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _buildMetric('GPS Dist', student['gps_distance']),
-                    _buildMetric('NCC', student['ncc']),
-                    _buildMetric('Magnitude', student['magnitude']),
+                    _buildMetric(
+                      'NCC',
+                      student['ncc'],
+                      isSuspicious: ncc < 0.5,
+                    ),
+                    _buildMetric(
+                      'Magnitude',
+                      student['magnitude'],
+                      isSuspicious: magnitude < 0.02,
+                    ),
                   ],
                 ),
               ],
@@ -347,6 +395,33 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
           ),
         );
       },
+    );
+  }
+
+  Widget _buildMetric(
+    String label,
+    dynamic value, {
+    bool isSuspicious = false,
+  }) {
+    // Use a consistent red color for the alert text
+    final Color valueColor =
+        isSuspicious ? Colors.red.shade700 : Colors.black87;
+    final FontWeight fontWeight =
+        isSuspicious ? FontWeight.w900 : FontWeight.bold;
+
+    return Column(
+      children: [
+        Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+        const SizedBox(height: 4),
+        Text(
+          value is num ? value.toStringAsFixed(2) : '-',
+          style: TextStyle(
+            fontWeight: fontWeight,
+            fontSize: 15,
+            color: valueColor,
+          ),
+        ),
+      ],
     );
   }
 
@@ -390,19 +465,6 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
           ),
         );
       },
-    );
-  }
-
-  Widget _buildMetric(String label, dynamic value) {
-    return Column(
-      children: [
-        Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-        const SizedBox(height: 4),
-        Text(
-          value is num ? value.toStringAsFixed(2) : '-',
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-        ),
-      ],
     );
   }
 }

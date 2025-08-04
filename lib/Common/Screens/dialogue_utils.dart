@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:app_settings/app_settings.dart';
 import 'package:flutter/services.dart';
 import 'package:smartroll/Common/services/auth_service.dart';
+import 'package:smartroll/Common/utils/effects.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Utility class for showing common dialogs and bottom sheets.
@@ -382,10 +383,16 @@ class DialogUtils {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const SizedBox(
-                  width: 40,
+                SizedBox(
+                  width: 100,
                   height: 40,
-                  child: CircularProgressIndicator(strokeWidth: 3.0),
+                  child: ShimmerWidget(
+                    // Assuming ShimmerWidget is correctly defined
+                    child: Image.asset(
+                      'assets/LOGO.webp', // Assuming this asset exists
+                      // width: MediaQuery.of(context).size.width,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 20),
                 Text(
