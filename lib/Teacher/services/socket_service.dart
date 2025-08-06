@@ -31,6 +31,11 @@ class SocketService {
   Stream<void> get sessionEndedStream => _sessionEndedController.stream;
   Stream<String> get errorStream => _errorController.stream;
 
+  bool _isDisconnectingGracefully = false;
+
+  // Variable to store the specific error message ---
+  String? _lastKnownError;
+
   void connectAndListen({
     required String sessionId,
     required String authToken,
@@ -38,18 +43,44 @@ class SocketService {
     // Disconnect any existing socket
     if (_socket != null && _socket!.connected) {
       _socket!.disconnect();
+      // debugPrint('Disconnecting existing socket before reconnecting.');
     }
+
+    _isDisconnectingGracefully = false;
+    _lastKnownError = null; // Reset the last known error
 
     _socket = IO.io('$backendBaseUrl/client', <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': true,
       'withCredentials': true,
+      'reconnection': true,
+      'reconnectionAttempts': 5 , // Try to reconnect 5 times
+      'reconnectionDelay': 2000, // Wait 2 seconds before each reconnection
+      'reconnectionDelayMax': 5000, // Max delay of 5 seconds
+      'timeout': 10000, // 10 seconds timeout for connection
+      'forceNew': true, // Force a new connection
+    });
+
+    // _socket!.onAny((event, data) {
+    //   debugPrint('SOCKET DEBUG :: Event: $event, Data: $data');
+    // });
+
+    _socket!.on('connect_error', (error) {
+      debugPrint("❌ Socket Connect Error: $error");
+      // The error object often contains the server's message.
+      // We default to a clear message if it's a generic network error.
+      final errorMessage =
+          error.toString().contains('Another teacher')
+              ? "Another teacher is already in the session."
+              : "Failed to connect to the session.";
+      debugPrint('Socket connection error: $errorMessage');
+      disconnect();
     });
 
     _socket!.onConnect((_) {
       debugPrint('✅ Socket connected. Emitting handshake.');
       _socket!.emit('socket_connection', {
-        'client': 'FE', // Flutter Emitter
+        'client': 'FE',
         'session_id': sessionId,
         'auth_token': authToken,
       });
@@ -59,6 +90,7 @@ class SocketService {
 
     _socket!.on('ongoing_session_data', (data) {
       debugPrint('Received ongoing_session_data');
+      debugPrint('Data: ${data['data']['data']['data']['marked_attendances']}');
       final sessionDetails = data['data']['data']['data'];
       final List markedAttendances =
           (sessionDetails['marked_attendances'] as List?) ?? [];
@@ -67,6 +99,7 @@ class SocketService {
 
       for (var student in markedAttendances) {
         _defaultStudentsController.add(student);
+        debugPrint('Adding student: $_defaultStudentsController');
       }
       for (var request in pendingRequests) {
         _manualRequestsController.add(request);
@@ -76,7 +109,7 @@ class SocketService {
 
     _socket!.on('mark_attendance', (data) {
       debugPrint('Received mark_attendance');
-      final attendanceData = data['data']['data']['data']['attendance_data'];
+      final attendanceData = data['data']['data']['attendance_data'];
       if (attendanceData != null) {
         _defaultStudentsController.add(attendanceData);
       }
@@ -84,7 +117,7 @@ class SocketService {
 
     _socket!.on('regulization_request', (data) {
       debugPrint('Received regulization_request');
-      final manualData = data['data']['data']['data']['attendance_data'];
+      final manualData = data['data']['data']['attendance_data'];
       if (manualData != null) {
         _manualRequestsController.add(manualData);
       }
@@ -121,14 +154,28 @@ class SocketService {
     });
 
     _socket!.on('client_error', (data) {
-      debugPrint('Received client_error: ${data['data']}');
-      _errorController.add(
-        data['data']?.toString() ?? 'An unknown server error occurred.',
-      );
+      final errorMessage =
+          data?['data']?.toString() ?? 'An unknown server error occurred.';
+      debugPrint('Received client_error, storing message: "$errorMessage"');
+      _lastKnownError = errorMessage;
     });
 
-    _socket!.onDisconnect((_) {
-      debugPrint('Socket disconnected.');
+    _socket!.onDisconnect((_) async {
+      debugPrint(
+        'Socket disconnected. Waiting briefly to resolve final error state...',
+      );
+      if (_isDisconnectingGracefully) return;
+
+      // Wait for a moment to allow any pending client_error to be processed.
+      await Future.delayed(const Duration(milliseconds: 6000));
+
+      if (_lastKnownError != null) {
+        _errorController.add(_lastKnownError!);
+        debugPrint('Pushing specific error to UI: "$_lastKnownError"');
+      } else {
+        _errorController.add('Connection to session lost unexpectedly.');
+        debugPrint('Pushing generic disconnect error to UI.');
+      }
     });
   }
 
@@ -194,6 +241,7 @@ class SocketService {
   }
 
   void disconnect() {
+    _isDisconnectingGracefully = true;
     _socket?.disconnect();
     _socket = null;
   }

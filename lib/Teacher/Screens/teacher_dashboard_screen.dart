@@ -353,9 +353,9 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
 
   Widget _buildDateSelector() {
     return AbsorbPointer(
-      absorbing: _isFetching,
+      absorbing: _isLoading,
       child: Opacity(
-        opacity: _isFetching ? 0.5 : 1.0,
+        opacity: _isLoading ? 0.5 : 1.0,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12.0),
           decoration: BoxDecoration(
@@ -722,7 +722,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
     // Show a loading dialog for better UX
     DialogUtils.showSessionLoadingDialog(
       context,
-      message: "Creating live session...",
+      message: "Connecting to session...",
     );
 
     try {
@@ -731,25 +731,39 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
         classroomSlug: classroomSlug,
       );
 
-      Navigator.of(context).pop(); // Dismiss loading dialog
+      if (mounted) Navigator.of(context).pop(); // Dismiss loading dialog
 
-      // Navigate to the live screen and wait for it to be popped
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => LiveSessionScreen(sessionData: sessionData),
-        ),
-      );
+      if (mounted) {
+        final result = await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => LiveSessionScreen(sessionData: sessionData),
+          ),
+        );
+
+        // After returning, check if a message was passed back.
+        if (result is String && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result),
+              backgroundColor: Colors.orange.shade800, // Use a warning color
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }
 
       // After returning from LiveSessionScreen, refresh the dashboard
       _fetchTimetableForDay(_selectedDate);
     } catch (e) {
-      Navigator.of(context).pop(); // Dismiss loading dialog
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) Navigator.of(context).pop(); // Dismiss loading dialog
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

@@ -82,9 +82,14 @@ class _MyAppState extends State<MyApp> {
           refreshToken != null &&
           refreshToken.isNotEmpty) {
         try {
-          await _storage.write(key: 'accessToken', value: accessToken);
+          // await _storage.write(key: 'accessToken', value: accessToken);
+          await _storage.write(
+            key: 'accessToken',
+            value:
+                'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzU0NTQ4NzQ1LCJpYXQiOjE3NTQzNzU5NDUsImp0aSI6IjZmOGQxNWE1ZWJmODQwOWM4NjVkYmQzZTlmMGI4ZjAzIiwidXNlcl9pZCI6MjQ1Mywib2JqIjp7InNsdWciOiI1NzcxOTZfMTczMTMyMDUyMCIsInByb2ZpbGUiOnsibmFtZSI6Ik1hbmF2IFNoYWgiLCJlbWFpbCI6IjE5NjMzMDMwNzU1Ni5tYW5hdi5zaGFoQGdtYWlsLmNvbSIsInJvbGUiOiJ0ZWFjaGVyIn0sImJyYW5jaCI6eyJicmFuY2hfbmFtZSI6IlRFU1RfQlJBTkNIX0ZPUl9DT1JFX1RFQU0iLCJzbHVnIjoiNTU2YTc4ZGE5NGI5NDcwZV8xNzMyNDcyNjc1MzA0In0sInRlYWNoZXJfY29kZSI6Ik1TIn19.m5zM3VqgLgv9BrrraPyU0OYHnYAHlJ-qFDKebE6gMAE',
+          );
           await _storage.write(key: 'refreshToken', value: refreshToken);
-          await _storage.write(key: 'role', value: role);
+          await _storage.write(key: 'role', value: 'teacher');
           //debugprint("Tokens stored successfully via deep link!");
 
           // Use the navigator key to push a fresh instance of SplashScreen

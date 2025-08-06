@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:smartroll/Common/Screens/dialogue_utils.dart';
 import 'package:smartroll/Common/utils/effects.dart';
 import 'package:smartroll/Teacher/services/session_service.dart';
 import 'package:smartroll/Teacher/services/socket_service.dart';
@@ -27,6 +28,7 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
   bool _isLoading = true;
   String? _errorMessage;
   String? _authToken; // Store the auth token for reuse
+  bool _isPopping = false;
 
   final List<StreamSubscription> _subscriptions = [];
 
@@ -80,16 +82,21 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
       ),
     );
     _subscriptions.add(
-      _socketService.sessionEndedStream.listen((_) => _onSessionEnded()),
-    );
-    _subscriptions.add(
-      _socketService.errorStream.listen(
-        (error) => setState(() {
-          _isLoading = false;
-          _errorMessage = error;
-        }),
+      _socketService.sessionEndedStream.listen(
+        (_) => _onSessionEnded(byServer: true),
       ),
     );
+    _subscriptions.add(_socketService.errorStream.listen(_onErrorReceived));
+  }
+
+  void _onErrorReceived(String error) {
+    if (_isPopping || !mounted) return;
+    _isPopping = true; // Lock the function immediately.
+
+    // Defer the navigation to prevent framework conflicts.
+    Future.delayed(Duration.zero, () {
+      Navigator.of(context).pop(error);
+    });
   }
 
   // --- Data Handling Logic ---
@@ -148,13 +155,17 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     });
   }
 
-  void _onSessionEnded() {
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Session has ended.")));
-      Navigator.of(context).pop();
-    }
+  void _onSessionEnded({bool byServer = false}) {
+    if (_isPopping || !mounted) return;
+    _isPopping = true;
+
+    final message =
+        byServer
+            ? "Session was ended by the server."
+            : "Session ended successfully.";
+    Future.delayed(Duration.zero, () {
+      Navigator.of(context).pop(message);
+    });
   }
 
   // --- UI Action Handlers ---
@@ -176,20 +187,29 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     );
   }
 
-  void _handleMarkAsAbsent(Map<String, dynamic> student) {
-    // Optimistic UI Update
-    setState(() {
-      _defaultStudents.remove(student);
-      _activeStudentCount = _defaultStudents.length;
-    });
-
-    // Send request to server
-    _socketService.updateStudentAttendance(
-      sessionId: widget.sessionData['session_id'],
-      authToken: _authToken!,
-      attendanceSlug: student['slug'],
-      isPresent: false,
+  void _handleMarkAsAbsent(Map<String, dynamic> student) async {
+    final studentName =
+        student['student']?['profile']?['name'] ?? 'this student';
+    final confirmed = await DialogUtils.showConfirmationDialog(
+      context,
+      title: 'Mark as Absent?',
+      content:
+          'Are you sure you want to mark $studentName as absent? This will remove them from the list.',
+      confirmText: 'Mark Absent',
     );
+
+    if (confirmed) {
+      setState(() {
+        _defaultStudents.remove(student);
+        _activeStudentCount = _defaultStudents.length;
+      });
+      _socketService.updateStudentAttendance(
+        sessionId: widget.sessionData['session_id'],
+        authToken: _authToken!,
+        attendanceSlug: student['slug'],
+        isPresent: false,
+      );
+    }
   }
 
   @override
@@ -285,12 +305,24 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
             child: ElevatedButton.icon(
               icon: const Icon(Icons.stop_circle_outlined),
               label: const Text('End Session'),
-              onPressed: () {
-                _socketService.endSession(
-                  sessionId: widget.sessionData['session_id'],
-                  authToken: _authToken!,
+              onPressed: () async {
+                // --- FIX 2: Add Confirmation and Proper Navigation ---
+                final confirmed = await DialogUtils.showConfirmationDialog(
+                  context,
+                  title: 'End Session?',
+                  content:
+                      'Are you sure you want to end this session for all students?',
+                  confirmText: 'End Session',
                 );
-                Navigator.of(context).pop();
+
+                if (confirmed && mounted) {
+                  _socketService.endSession(
+                    sessionId: widget.sessionData['session_id'],
+                    authToken: _authToken!,
+                  );
+                  // Pop with a success message to be shown on the dashboard.
+                  _onSessionEnded();
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red.shade700,
@@ -306,14 +338,14 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
 
   Widget _buildContent(Widget Function() contentBuilder) {
     if (_isLoading) return const ListLoadingShimmer();
-    if (_errorMessage != null) {
-      return Center(
-        child: Text(
-          'Error: $_errorMessage',
-          style: const TextStyle(color: Colors.red),
-        ),
-      );
-    }
+    // if (_errorMessage != null) {
+    //   return Center(
+    //     child: Text(
+    //       'Error: $_errorMessage',
+    //       style: const TextStyle(color: Colors.red),
+    //     ),
+    //   );
+    // }
     return contentBuilder();
   }
 

@@ -424,6 +424,58 @@ class DialogUtils {
       },
     );
   }
+
+  static Future<bool> showConfirmationDialog(
+    BuildContext context, {
+    required String title,
+    required String content,
+    String confirmText = 'Confirm',
+    String cancelText = 'Cancel',
+  }) async {
+    // `showDialog<bool>` specifies that the dialog will return a boolean value.
+    final bool? result = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12.0),
+          ),
+          title: Text(title),
+          content: Text(content),
+          actions: <Widget>[
+            // The "Cancel" button
+            TextButton(
+              child: Text(cancelText),
+              onPressed: () {
+                // When the user cancels, pop the dialog and return `false`.
+                Navigator.of(context).pop(false);
+              },
+            ),
+            // The "Confirm" button
+            TextButton(
+              child: Text(
+                confirmText,
+                style: TextStyle(
+                  // Use a destructive/warning color for the confirm action
+                  // to draw the user's attention.
+                  color: Colors.red.shade700,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              onPressed: () {
+                // When the user confirms, pop the dialog and return `true`.
+                Navigator.of(context).pop(true);
+              },
+            ),
+          ],
+        );
+      },
+    );
+
+    // If the user dismisses the dialog by tapping outside of it, `showDialog`
+    // returns `null`. We treat this as a cancellation, so we return `false`.
+    return result ?? false;
+  }
 } // End of DialogUtils Class
 
 // --- Private StatefulWidget for Manual Marking Dialog Content (Light Theme) ---

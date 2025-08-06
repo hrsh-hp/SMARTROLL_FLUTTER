@@ -132,16 +132,11 @@ class SessionService {
         'classroom_slug': classroomSlug,
       }),
     );
-
-    if (response.statusCode == 200) {
-      final decodedBody = jsonDecode(response.body);
-      if (decodedBody['error'] == false) {
-        return decodedBody['data'];
-      } else {
-        throw decodedBody['message'] ?? 'Backend returned an error.';
-      }
+    final decodedBody = jsonDecode(response.body);
+    if (response.statusCode == 200 && decodedBody['error'] == false) {
+      return decodedBody['data'];
     } else {
-      throw 'Failed to create session. Status: ${response.statusCode}';
+      throw decodedBody['message'] ?? 'Backend returned an error.';
     }
   }
 
