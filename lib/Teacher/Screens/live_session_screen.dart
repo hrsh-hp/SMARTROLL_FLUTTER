@@ -10,7 +10,12 @@ import 'package:smartroll/Common/utils/constants.dart';
 
 class LiveSessionScreen extends StatefulWidget {
   final Map<String, dynamic> sessionData;
-  const LiveSessionScreen({super.key, required this.sessionData});
+  final Map<String, dynamic> initialData;
+  const LiveSessionScreen({
+    super.key,
+    required this.sessionData,
+    required this.initialData,
+  });
 
   @override
   State<LiveSessionScreen> createState() => _LiveSessionScreenState();
@@ -39,17 +44,60 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     _tabController.addListener(
       () => setState(() {}),
     ); // To rebuild FAB on tab change
-    _initializeSession();
+    // 1. Populate the UI with the initial data received from the dashboard.
+    _populateInitialData();
+
+    // 2. Then, initialize the live listeners for any FUTURE updates.
+    _initializeLiveListeners();
+    // _initializeSession();
   }
 
-  void _initializeSession() async {
+  /// Populates the lists with the data passed from the dashboard.
+  void _populateInitialData() {
+    // We already have the data, so no loading is needed.
+    _isLoading = false;
+    // _initialLoadComplete = true;
+
+    // Safely cast the lists from the initial data payload
+    final List initialDefault = (widget.initialData['default'] as List?) ?? [];
+    final List initialManual = (widget.initialData['manual'] as List?) ?? [];
+
+    // Process and sort the initial default students
+    for (var student in initialDefault) {
+      final double ncc = (student['ncc'] as num?)?.toDouble() ?? 0.0;
+      final double magnitude =
+          (student['magnitude'] as num?)?.toDouble() ?? 0.0;
+      student['isSuspicious'] = (ncc < 0.5 || magnitude < 0.02);
+      _defaultStudents.add(student);
+    }
+    _sortDefaultStudents();
+
+    // Process initial manual requests
+    for (var request in initialManual) {
+      _manualRequests.add(request);
+    }
+
+    _activeStudentCount = widget.initialData['count'] ?? 0;
+  }
+
+  /// Subscribes to live socket events and starts the microphone.
+  void _initializeLiveListeners() async {
     _authToken = await secureStorage.read(key: 'accessToken');
     final String sessionId = widget.sessionData['session_id'];
 
     if (_authToken == null) {
-      // Handle error
+      _onErrorReceived("Authentication error.");
       return;
     }
+
+    // void _initializeSession() async {
+    //   _authToken = await secureStorage.read(key: 'accessToken');
+    //   final String sessionId = widget.sessionData['session_id'];
+
+    //   if (_authToken == null) {
+    //     // Handle error
+    //     return;
+    //   }
 
     _sessionService.startRealAudioStream(
       onAudioChunk: (wavBlob) {
@@ -61,14 +109,14 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
       },
     );
 
-    _socketService.connectAndListen(
-      sessionId: sessionId,
-      authToken: _authToken!,
-    );
+    // _socketService.connectAndListen(
+    //   sessionId: sessionId,
+    //   authToken: _authToken!,
+    // );
 
-    Timer(const Duration(seconds: 10), () {
-      if (_isLoading && mounted) setState(() => _isLoading = false);
-    });
+    // Timer(const Duration(seconds: 10), () {
+    //   if (_isLoading && mounted) setState(() => _isLoading = false);
+    // });
 
     _subscriptions.add(
       _socketService.defaultStudentsStream.listen(_onDefaultStudentReceived),
@@ -106,6 +154,9 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     final double ncc = (student['ncc'] as num?)?.toDouble() ?? 0.0;
     final double magnitude = (student['magnitude'] as num?)?.toDouble() ?? 0.0;
     student['isSuspicious'] = (ncc < 0.5 || magnitude < 0.02);
+    debugPrint(
+      'Received student: ${student['student']?['profile']?['name']} - NCC: $ncc, Magnitude: $magnitude',
+    );
 
     setState(() {
       _isLoading = false;

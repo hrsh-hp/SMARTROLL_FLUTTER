@@ -8,6 +8,7 @@ import 'package:smartroll/Common/utils/constants.dart';
 import 'package:smartroll/Common/utils/effects.dart';
 import 'package:smartroll/Teacher/Screens/live_session_screen.dart';
 import 'package:smartroll/Teacher/services/session_service.dart';
+import 'package:smartroll/Teacher/services/socket_service.dart';
 import 'package:smartroll/Teacher/utils/teacher_data_provider.dart';
 
 import 'package:smartroll/Student/utils/attendace_data_collector.dart';
@@ -33,6 +34,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
   List<Map<String, dynamic>> _allClassrooms = [];
 
   final SessionService _sessionService = SessionService.instance;
+  final SocketService _socketService = SocketService.instance;
 
   @override
   void initState() {
@@ -731,12 +733,21 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
         classroomSlug: classroomSlug,
       );
 
+      final initialData = await _socketService.connectAndListen(
+        sessionId: sessionData['session_id'],
+        authToken: await secureStorage.read(key: 'accessToken') ?? '',
+      );
+
       if (mounted) Navigator.of(context).pop(); // Dismiss loading dialog
 
       if (mounted) {
         final result = await Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (context) => LiveSessionScreen(sessionData: sessionData),
+            builder:
+                (context) => LiveSessionScreen(
+                  sessionData: sessionData,
+                  initialData: initialData,
+                ),
           ),
         );
 
@@ -764,6 +775,8 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
           ),
         );
       }
+      await _sessionService.endSession();
+      _socketService.disconnect();
     }
   }
 

@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:just_audio/just_audio.dart';
+// import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:smartroll/Common/utils/constants.dart';
 import 'package:smartroll/Teacher/utils/teacher_audio_recorder.dart'; // Import the recorder
@@ -48,13 +49,19 @@ class SessionService {
       final sessionData = await _createSessionAPI(lectureSlug, classroomSlug);
       currentSessionId = sessionData['session_id'];
       final String audioUrlPath = sessionData['audio_url'];
-      final Uint8List audioBytes = await _fetchAudioAPI(audioUrlPath);
+      // final Uint8List audioBytes = await _fetchAudioAPI(audioUrlPath);
+      // _tempChirpFilePath = await _saveBytesToTempFile(
+      //   audioBytes,
+      //   currentSessionId!,
+      // );
+      final Uint8List flacBytes = await _fetchAudioAPI(audioUrlPath);
+
+      // 2. Save the bytes to a temporary file with the correct .flac extension.
       _tempChirpFilePath = await _saveBytesToTempFile(
-        audioBytes,
+        flacBytes,
         currentSessionId!,
       );
       await _playChirpFromFile(_tempChirpFilePath!);
-
       sessionState.value = SessionState.active;
       debugPrint("✅ Session started successfully. Playing ultrasonic chirp.");
       return sessionData;
@@ -86,7 +93,7 @@ class SessionService {
   Future<void> endSession() async {
     // Stop both audio sources
     stopRealAudioStream();
-    if (_chirpPlayer.playing) {
+    if (_chirpPlayer.state == PlayerState.playing) {
       await _chirpPlayer.stop();
     }
 
@@ -160,7 +167,7 @@ class SessionService {
   Future<String> _saveBytesToTempFile(Uint8List bytes, String sessionId) async {
     final tempDir = await getTemporaryDirectory();
     // Use a unique name to avoid conflicts
-    final filePath = '${tempDir.path}/chirp_$sessionId.wav';
+    final filePath = '${tempDir.path}/chirp_$sessionId.flac';
     final file = File(filePath);
     await file.writeAsBytes(bytes);
     debugPrint("✅ [FILE WRITE] Saved ${bytes.length} bytes to: $filePath");
@@ -170,10 +177,10 @@ class SessionService {
 
   // --- UPDATED HELPER METHOD: Play from file ---
   Future<void> _playChirpFromFile(String filePath) async {
-    await _chirpPlayer.setFilePath(filePath);
-    await _chirpPlayer.setLoopMode(LoopMode.one);
+    // await _chirpPlayer.setSource(DeviceFileSource(filePath));
+    await _chirpPlayer.setReleaseMode(ReleaseMode.loop);
     await _chirpPlayer.setVolume(0.8);
-    _chirpPlayer.play();
+    _chirpPlayer.play(DeviceFileSource(filePath));
   }
 
   void dispose() {
