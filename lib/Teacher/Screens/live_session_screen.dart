@@ -67,7 +67,8 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
       final double ncc = (student['ncc'] as num?)?.toDouble() ?? 0.0;
       final double magnitude =
           (student['magnitude'] as num?)?.toDouble() ?? 0.0;
-      student['isSuspicious'] = (ncc < 0.5 || magnitude < 0.02);
+      final bool isManual = (student['manual']) ?? false;
+      student['isSuspicious'] = ((ncc < 0.5 || magnitude < 0.02) && !isManual);
       _defaultStudents.add(student);
     }
     _sortDefaultStudents();
@@ -153,7 +154,8 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
 
     final double ncc = (student['ncc'] as num?)?.toDouble() ?? 0.0;
     final double magnitude = (student['magnitude'] as num?)?.toDouble() ?? 0.0;
-    student['isSuspicious'] = (ncc < 0.5 || magnitude < 0.02);
+    final bool isManual = (student['manual']) ?? false;
+    student['isSuspicious'] = ((ncc < 0.5 || magnitude < 0.02) && !isManual);
     debugPrint(
       'Received student: ${student['student']?['profile']?['name']} - NCC: $ncc, Magnitude: $magnitude',
     );
@@ -278,7 +280,7 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
@@ -286,7 +288,7 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
           'Live Session (Active: $_activeStudentCount)',
           style: const TextStyle(color: Colors.black87, fontSize: 18),
         ),
-        iconTheme: const IconThemeData(color: Colors.black87),
+        iconTheme: IconThemeData(color: theme.primaryColor),
         bottom: TabBar(
           controller: _tabController,
           labelColor: theme.primaryColor,
@@ -422,6 +424,7 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
         final double ncc = (student['ncc'] as num?)?.toDouble() ?? 0.0;
         final double magnitude =
             (student['magnitude'] as num?)?.toDouble() ?? 0.0;
+        final bool isManual = (student['manual']) ?? false;
 
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
@@ -446,8 +449,7 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
                   children: [
                     Expanded(
                       child: Text(
-                        student['student']?['profile']?['name'] ??
-                            'Unknown Student',
+                        '${student['student']?['profile']?['name'] ?? 'Unknown Student'} ${isManual ? '(Manual)' : ''}',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
@@ -464,24 +466,25 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
                     ),
                   ],
                 ),
-
-                const Divider(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildMetric('GPS Dist', student['gps_distance']),
-                    _buildMetric(
-                      'NCC',
-                      student['ncc'],
-                      isSuspicious: ncc < 0.5,
-                    ),
-                    _buildMetric(
-                      'Magnitude',
-                      student['magnitude'],
-                      isSuspicious: magnitude < 0.02,
-                    ),
-                  ],
-                ),
+                if (!isManual) ...[
+                  const Divider(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildMetric('GPS Dist', student['gps_distance']),
+                      _buildMetric(
+                        'NCC',
+                        student['ncc'],
+                        isSuspicious: ncc < 0.5,
+                      ),
+                      _buildMetric(
+                        'Magnitude',
+                        student['magnitude'],
+                        isSuspicious: magnitude < 0.02,
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

@@ -62,10 +62,6 @@ class SocketService {
       'forceNew': true, // Force a new connection
     });
 
-    _socket!.onAny((event, data) {
-      debugPrint('SOCKET DEBUG :: Event: $event, Data: $data');
-    });
-
     _socket!.on('connect_error', (error) {
       debugPrint("❌ Socket Connect Error: $error");
       final errorMessage =
@@ -73,7 +69,7 @@ class SocketService {
               ? "Another teacher is already in the session."
               : "Failed to connect to the session server.";
       if (!_connectionCompleter!.isCompleted) {
-        _connectionCompleter!.completeError(errorMessage);
+        _connectionCompleter!.completeError(UserFacingException(errorMessage));
       }
     });
 
@@ -96,7 +92,7 @@ class SocketService {
       if (sessionDetails == null) {
         if (!_connectionCompleter!.isCompleted) {
           _connectionCompleter!.completeError(
-            "Invalid initial data from server.",
+            UserFacingException("Invalid initial data from server."),
           );
         }
         return;
@@ -144,7 +140,7 @@ class SocketService {
 
     _socket!.on('regulization_request', (data) {
       debugPrint('Received regulization_request');
-      final manualData = data['data']['data']['attendance_data'];
+      final manualData = data?['data']?['data']?['data']?['attendance_data'];
       if (manualData != null) {
         _manualRequestsController.add(manualData);
       }
@@ -153,6 +149,7 @@ class SocketService {
     _socket!.on('regulization_approved', (data) {
       debugPrint('Received regulization_approved');
       final List<dynamic>? approvedStudents = data?['data']?['data']?['data'];
+      debugPrint(approvedStudents.toString());
       if (approvedStudents != null) {
         for (var student in approvedStudents) {
           _defaultStudentsController.add(student);
@@ -189,7 +186,7 @@ class SocketService {
           'An unknown server error occurred.';
       // If the handshake is still pending, this is a fatal error.
       if (!_connectionCompleter!.isCompleted) {
-        _connectionCompleter!.completeError(errorMessage);
+        _connectionCompleter!.completeError(UserFacingException(errorMessage));
       } else {
         // If the handshake is already complete, push to the live error stream.
         _errorController.add(errorMessage);
@@ -205,7 +202,9 @@ class SocketService {
     _socket!.onDisconnect((_) async {
       debugPrint('Socket disconnected ');
       if (!_connectionCompleter!.isCompleted) {
-        _connectionCompleter!.completeError("Connection lost unexpectedly.");
+        _connectionCompleter!.completeError(
+          UserFacingException("Connection lost unexpectedly."),
+        );
       }
       // Wait for a moment to allow any pending client_error to be processed.
       // await Future.delayed(const Duration(milliseconds: 6000));

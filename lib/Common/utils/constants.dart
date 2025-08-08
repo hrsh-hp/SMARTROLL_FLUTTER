@@ -116,3 +116,12 @@ class NetwrokUtils {
     // Add ConnectivityResult.other based on future package updates if needed.
   }
 }
+
+class UserFacingException implements Exception {
+  final String message;
+
+  UserFacingException(this.message);
+
+  @override
+  String toString() => message;
+}

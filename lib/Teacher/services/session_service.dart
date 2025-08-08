@@ -38,7 +38,7 @@ class SessionService {
   }) async {
     if (sessionState.value == SessionState.starting ||
         sessionState.value == SessionState.active) {
-      throw 'Another session is already active.';
+      throw SessionServiceException('Another session is already active.');
     }
     await endSession(); // Defensively clean up any previous state
 
@@ -49,14 +49,8 @@ class SessionService {
       final sessionData = await _createSessionAPI(lectureSlug, classroomSlug);
       currentSessionId = sessionData['session_id'];
       final String audioUrlPath = sessionData['audio_url'];
-      // final Uint8List audioBytes = await _fetchAudioAPI(audioUrlPath);
-      // _tempChirpFilePath = await _saveBytesToTempFile(
-      //   audioBytes,
-      //   currentSessionId!,
-      // );
       final Uint8List flacBytes = await _fetchAudioAPI(audioUrlPath);
 
-      // 2. Save the bytes to a temporary file with the correct .flac extension.
       _tempChirpFilePath = await _saveBytesToTempFile(
         flacBytes,
         currentSessionId!,
@@ -65,21 +59,42 @@ class SessionService {
       sessionState.value = SessionState.active;
       debugPrint("✅ Session started successfully. Playing ultrasonic chirp.");
       return sessionData;
-    } catch (e) {
-      debugPrint("❌ Failed to start session: $e");
-      errorMessage = e.toString();
+    } on SessionServiceException catch (e) {
+      debugPrint("❌ Failed to start session: ${e.runtimeType}: ${e.message}");
+      errorMessage = e.message;
       sessionState.value = SessionState.error;
       await endSession();
       rethrow;
+    } catch (e) {
+      debugPrint("❌ Failed to start session with an unexpected error: $e");
+      errorMessage = "An unexpected error occurred: ${e.toString()}";
+      sessionState.value = SessionState.error;
+      await endSession();
+      throw SessionServiceException(
+        "An unexpected error occurred: ${e.toString()}",
+      );
     }
   }
 
   /// Starts the teacher's microphone recording and provides chunks via a callback.
   void startRealAudioStream({required Function(Uint8List) onAudioChunk}) {
     stopRealAudioStream(); // Ensure any previous stream is stopped
-    final audioStream = _micRecorder.startRecording();
-    _micStreamSubscription = audioStream.listen(onAudioChunk);
-    debugPrint("✅ Teacher microphone recording stream started.");
+    try {
+      final audioStream = _micRecorder.startRecording();
+      _micStreamSubscription = audioStream.listen(
+        onAudioChunk,
+        onError: (error) {
+          throw RecordingException(
+            "Error in microphone stream: ${error.toString()}",
+          );
+        },
+      );
+      debugPrint("✅ Teacher microphone recording stream started.");
+    } catch (e) {
+      throw RecordingException(
+        "Failed to start microphone recording: ${e.toString()}",
+      );
+    }
   }
 
   /// Stops the teacher's microphone recording stream.
@@ -123,44 +138,60 @@ class SessionService {
     String classroomSlug,
   ) async {
     final String? token = await secureStorage.read(key: 'accessToken');
-    if (token == null) throw 'Authentication token not found.';
+    if (token == null) {
+      throw NetworkException('Authentication token not found.');
+    }
 
     final url = Uri.parse(
       '$backendBaseUrl/api/manage/session/create_lecture_session/',
     );
-    final response = await http.post(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'lecture_slug': lectureSlug,
-        'classroom_slug': classroomSlug,
-      }),
-    );
-    final decodedBody = jsonDecode(response.body);
-    if (response.statusCode == 200 && decodedBody['error'] == false) {
-      return decodedBody['data'];
-    } else {
-      throw decodedBody['message'] ?? 'Backend returned an error.';
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'lecture_slug': lectureSlug,
+          'classroom_slug': classroomSlug,
+        }),
+      );
+      final decodedBody = jsonDecode(response.body);
+      if (response.statusCode == 200 && decodedBody['error'] == false) {
+        return decodedBody['data'];
+      } else {
+        throw NetworkException(
+          decodedBody['message'] ?? 'Backend returned an error.',
+        );
+      }
+    } on SocketException catch (e) {
+      throw NetworkException('Network error: ${e.message}');
+    } catch (e) {
+      throw NetworkException('Failed to create session: ${e.toString()}');
     }
   }
 
   Future<Uint8List> _fetchAudioAPI(String audioUrlPath) async {
-    // The base URL for media might be different, adjust if needed.
-    // Assuming it's the same base URL for now.
     final url = Uri.parse('$backendBaseUrl/api/media/$audioUrlPath');
     debugPrint("Attempting to fetch audio from this exact URL: $url");
-    final response = await http.get(url);
+    try {
+      final response = await http.get(url);
 
-    if (response.statusCode == 200) {
-      debugPrint(
-        "✅ [DOWNLOAD] Successfully downloaded ${response.bodyBytes.length} bytes from $url",
-      );
-      return response.bodyBytes;
-    } else {
-      throw 'Failed to download audio chirp. Status: ${response.statusCode}';
+      if (response.statusCode == 200) {
+        debugPrint(
+          "✅ [DOWNLOAD] Successfully downloaded ${response.bodyBytes.length} bytes from $url",
+        );
+        return response.bodyBytes;
+      } else {
+        throw NetworkException(
+          'Failed to download audio chirp. Status: ${response.statusCode}',
+        );
+      }
+    } on SocketException catch (e) {
+      throw NetworkException('Network error: ${e.message}');
+    } catch (e) {
+      throw NetworkException('Failed to fetch audio: ${e.toString()}');
     }
   }
 
@@ -177,10 +208,16 @@ class SessionService {
 
   // --- UPDATED HELPER METHOD: Play from file ---
   Future<void> _playChirpFromFile(String filePath) async {
-    // await _chirpPlayer.setSource(DeviceFileSource(filePath));
-    await _chirpPlayer.setReleaseMode(ReleaseMode.loop);
-    await _chirpPlayer.setVolume(0.8);
-    _chirpPlayer.play(DeviceFileSource(filePath));
+    try {
+      await _chirpPlayer.setPlayerMode(PlayerMode.mediaPlayer);
+      await _chirpPlayer.setReleaseMode(ReleaseMode.loop);
+      await _chirpPlayer.setVolume(0.8);
+      await _chirpPlayer.play(DeviceFileSource(filePath));
+    } catch (e) {
+      throw AudioPlaybackException(
+        "Error playing chirp from file: $filePath. Details: ${e.toString()}",
+      );
+    }
   }
 
   void dispose() {
@@ -190,3 +227,28 @@ class SessionService {
 }
 
 /// A custom AudioSource for the `just_audio` package that plays from a Uint8List.
+
+// Custom Exceptions for SessionService
+class SessionServiceException implements Exception {
+  final String message;
+  SessionServiceException(this.message);
+
+  @override
+  String toString() => 'SessionServiceException: $message';
+}
+
+class AudioInitializationException extends SessionServiceException {
+  AudioInitializationException(super.message);
+}
+
+class RecordingException extends SessionServiceException {
+  RecordingException(super.message);
+}
+
+class AudioPlaybackException extends SessionServiceException {
+  AudioPlaybackException(super.message);
+}
+
+class NetworkException extends SessionServiceException {
+  NetworkException(super.message);
+}

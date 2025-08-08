@@ -767,10 +767,23 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
       _fetchTimetableForDay(_selectedDate);
     } catch (e) {
       if (mounted) Navigator.of(context).pop(); // Dismiss loading dialog
+      String userFriendlyMessage;
+
+      if (e is UserFacingException) {
+        // This is a known, safe-to-display error from our business logic (e.g., SocketService).
+        userFriendlyMessage = e.message;
+      } else {
+        // This is an unexpected error (PlatformException, FormatException, etc.).
+        // We mask it with a generic but helpful message.
+        debugPrint(
+          "Caught an unexpected error: ${e.runtimeType.toString()} - $e",
+        );
+        userFriendlyMessage = "An unexpected error occurred. Please try again.";
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${e.toString()}'),
+            content: Text('Error: $userFriendlyMessage'),
             backgroundColor: Colors.red,
           ),
         );
