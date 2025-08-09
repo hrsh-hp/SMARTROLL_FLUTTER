@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:smartroll/Common/utils/constants.dart'; // For your socket_url
 
+enum SocketConnectionState { connected, reconnecting, failed }
+
 class SocketService {
   // Singleton setup
   SocketService._privateConstructor();
@@ -13,6 +15,11 @@ class SocketService {
 
   IO.Socket? _socket;
   Completer<Map<String, dynamic>>? _connectionCompleter;
+
+  final _connectionStateController =
+      StreamController<SocketConnectionState>.broadcast();
+  Stream<SocketConnectionState> get connectionStateStream =>
+      _connectionStateController.stream;
 
   // StreamControllers to broadcast data to the UI
   final _defaultStudentsController =
@@ -33,9 +40,6 @@ class SocketService {
   Stream<void> get sessionEndedStream => _sessionEndedController.stream;
   Stream<String> get errorStream => _errorController.stream;
 
-  // Variable to store the specific error message ---
-  String? _lastKnownError;
-
   Future<Map<String, dynamic>> connectAndListen({
     required String sessionId,
     required String authToken,
@@ -48,18 +52,16 @@ class SocketService {
     // Disconnect any existing socket
     if (_socket != null) _socket!.dispose();
 
-    _lastKnownError = null; // Reset the last known error
-
     _socket = IO.io('$backendBaseUrl/client', <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': false, // We will connect manually
       'withCredentials': true,
+      'forceNew': true, // Force a new connection
       'reconnection': true,
       'reconnectionAttempts': 5, // Try to reconnect 5 times
       'reconnectionDelay': 2000, // Wait 2 seconds before each reconnection
       'reconnectionDelayMax': 5000, // Max delay of 5 seconds
       'timeout': 10000, // 10 seconds timeout for connection
-      'forceNew': true, // Force a new connection
     });
 
     _socket!.on('connect_error', (error) {
@@ -75,11 +77,36 @@ class SocketService {
 
     _socket!.onConnect((_) {
       debugPrint('✅ Socket connected. Emitting handshake.');
+      _connectionStateController.add(SocketConnectionState.connected);
       _socket!.emit('socket_connection', {
         'client': 'FE',
         'session_id': sessionId,
         'auth_token': authToken,
       });
+    });
+
+    _socket!.on('reconnect', (attemptNumber) {
+      debugPrint('✅ Socket reconnected on attempt $attemptNumber.');
+      _connectionStateController.add(SocketConnectionState.connected);
+      // Re-emit handshake to ensure server recognizes the new connection
+      _socket!.emit('socket_connection', {
+        'client': 'FE',
+        'session_id': sessionId,
+        'auth_token': authToken,
+      });
+    });
+
+    _socket!.on('reconnecting', (attemptNumber) {
+      debugPrint('Socket reconnecting... attempt $attemptNumber');
+      _connectionStateController.add(SocketConnectionState.reconnecting);
+    });
+
+    _socket!.on('reconnect_failed', (_) {
+      debugPrint('❌ All reconnection attempts failed.');
+      _connectionStateController.add(SocketConnectionState.failed);
+      _errorController.add(
+        "Could not reconnect to the session. Please try again.",
+      );
     });
 
     // --- LISTEN TO ALL SERVER EVENTS ---
@@ -201,10 +228,13 @@ class SocketService {
 
     _socket!.onDisconnect((_) async {
       debugPrint('Socket disconnected ');
-      if (!_connectionCompleter!.isCompleted) {
-        _connectionCompleter!.completeError(
-          UserFacingException("Connection lost unexpectedly."),
-        );
+      if (_connectionCompleter?.isCompleted ?? false) {
+        _connectionStateController.add(SocketConnectionState.reconnecting);
+      } else {
+        // This handles disconnects during the initial handshake
+        if (!_connectionCompleter!.isCompleted) {
+          _connectionCompleter!.completeError("Connection lost unexpectedly.");
+        }
       }
       // Wait for a moment to allow any pending client_error to be processed.
       // await Future.delayed(const Duration(milliseconds: 6000));

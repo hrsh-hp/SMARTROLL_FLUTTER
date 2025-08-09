@@ -1,6 +1,7 @@
 // lib/Teacher/Screens/live_session_screen.dart
 
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:smartroll/Common/Screens/dialogue_utils.dart';
 import 'package:smartroll/Common/utils/effects.dart';
@@ -36,6 +37,7 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
   bool _isPopping = false;
 
   final List<StreamSubscription> _subscriptions = [];
+  SocketConnectionState _connectionState = SocketConnectionState.connected;
 
   @override
   void initState() {
@@ -118,6 +120,15 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     // Timer(const Duration(seconds: 10), () {
     //   if (_isLoading && mounted) setState(() => _isLoading = false);
     // });
+    _subscriptions.add(
+      _socketService.connectionStateStream.listen((state) {
+        if (mounted) {
+          setState(() {
+            _connectionState = state;
+          });
+        }
+      }),
+    );
 
     _subscriptions.add(
       _socketService.defaultStudentsStream.listen(_onDefaultStudentReceived),
@@ -321,11 +332,17 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
+      body: Stack(
         children: [
-          _buildContent(_buildDefaultStudentList),
-          _buildContent(_buildManualRequestList),
+          TabBarView(
+            controller: _tabController,
+            children: [
+              _buildContent(_buildDefaultStudentList),
+              _buildContent(_buildManualRequestList),
+            ],
+          ),
+          if (_connectionState == SocketConnectionState.reconnecting)
+            _buildReconnectingOverlay(),
         ],
       ),
       floatingActionButton:
@@ -602,6 +619,55 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
               style: TextStyle(fontSize: 14, color: Colors.grey[600]),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // Reconneting overlay for socker reconnetion
+  Widget _buildReconnectingOverlay() {
+    // This widget will be built inside the Stack, so it will cover the screen.
+    return Positioned.fill(
+      // IgnorePointer prevents any taps from passing through to the UI below when the overlay is visible.
+      child: IgnorePointer(
+        ignoring: _connectionState != SocketConnectionState.reconnecting,
+        // AnimatedOpacity provides a smooth fade-in and fade-out effect.
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 300),
+          opacity:
+              _connectionState == SocketConnectionState.reconnecting
+                  ? 1.0
+                  : 0.0,
+          child: BackdropFilter(
+            // The blur effect itself. Adjust sigma values for more/less blur.
+            filter: ui.ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+            child: Container(
+              // A subtle color overlay on top of the blur to improve text contrast.
+              color: Colors.black.withOpacity(0.2),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 3.0,
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Connection lost. Reconnecting...',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 17,
+                        fontWeight: FontWeight.w500,
+                        decoration: TextDecoration.none,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
