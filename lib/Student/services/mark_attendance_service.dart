@@ -13,6 +13,7 @@ import 'package:smartroll/Student/utils/attendace_data_collector.dart';
 import 'package:smartroll/Common/utils/constants.dart';
 import 'package:smartroll/Common/services/auth_service.dart';
 import 'package:smartroll/Common/services/device_id_service.dart';
+import 'package:smartroll/Student/services/pending_queue_service.dart';
 
 class MarkAttendaceService {
   // Services needed by the handler
@@ -66,6 +67,9 @@ class MarkAttendaceService {
     if (isMarkingLecture[lectureSlug] == true) return;
 
     final String initiator = reason == null ? 'auto' : 'manual';
+    debugPrint(
+      '[MarkAttendance] Start handleAttendance slug=$lectureSlug initiator=$initiator',
+    );
 
     // --- Initial Checks ---
     // 1. Developer Mode / Debugger Check
@@ -129,10 +133,16 @@ class MarkAttendaceService {
       isMarkingLecture[lectureSlug] = true;
       markingInitiator[lectureSlug] = initiator;
     });
+    debugPrint(
+      '[MarkAttendance] Set loading state for slug=$lectureSlug initiator=$initiator',
+    );
     if (isMarkingLecture[lectureSlug] == null) return;
     // --- Conditional Data Collection ---
     AttendanceDataResult? dataResult;
     if (initiator == 'auto') {
+      debugPrint(
+        '[MarkAttendance] Collecting data (location+audio) for slug=$lectureSlug',
+      );
       showSnackbar(
         "Marking Attendance please do not close the app...",
         isError: false,
@@ -140,6 +150,9 @@ class MarkAttendaceService {
       );
       dataResult = await dataCollector.collectData(
         recordingDuration: const Duration(seconds: 5),
+      );
+      debugPrint(
+        '[MarkAttendance] Data collection status=${dataResult.status} err=${dataResult.errorMessage}',
       );
       // Hide immediately after await returns, before processing result
       if (context.mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -202,6 +215,7 @@ class MarkAttendaceService {
             break;
         }
         if (showSettingsDialog) {
+          debugPrint('[MarkAttendance] Showing settings dialog: $dialogTitle');
           DialogUtils.showPermissionSettingsSheet(
             context: context, // Pass the context
             title: dialogTitle,
@@ -210,9 +224,13 @@ class MarkAttendaceService {
             onErrorSnackbar: showSnackbar,
           );
         } else {
+          debugPrint('[MarkAttendance] Data collection error: $errorMsg');
           showSnackbar(errorMsg, isError: true);
         }
         resetMarkingState(lectureSlug);
+        debugPrint(
+          '[MarkAttendance] Reset state due to data collection failure slug=$lectureSlug',
+        );
         return;
       }
       if (dataResult.locationData == null ||
@@ -244,6 +262,9 @@ class MarkAttendaceService {
 
     if (!context.mounted || isMarkingLecture[lectureSlug] == null) return;
     // Call the internal API request helper
+    debugPrint(
+      '[MarkAttendance] Calling API helper url=${initiator == 'auto' ? '$backendBaseUrl/api/manage/session/mark_attendance_for_student/' : '$backendBaseUrl/api/manage/session/mark_for_regulization/'} initiator=$initiator',
+    );
     await _makeApiRequestWithRetryInternal(
       // Pass necessary callbacks and data
       context: context, // Needed for navigation on logout
@@ -269,6 +290,7 @@ class MarkAttendaceService {
       recordingStartTimeMillis: dataResult?.recordingStartTimeMillis,
       reason: reason,
     );
+    debugPrint('[MarkAttendance] API helper completed for slug=$lectureSlug');
 
     // Hide the "Marking/Submitting" snackbar
     if (context.mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -305,7 +327,11 @@ class MarkAttendaceService {
     Uint8List? audioBytes,
     int? recordingStartTimeMillis,
     String? reason,
+    bool suppressResetOnFinally = false,
   }) async {
+    debugPrint(
+      '[MarkAttendance] _makeApiRequestWithRetryInternal start slug=$lectureSlug initiator=$initiator url=$url',
+    );
     String currentToken = initialAccessToken; // Token for the current attempt
     if (isMarkingLecture[lectureSlug] == null) return; // Check again
     // --- Function to build the request ---
@@ -333,6 +359,7 @@ class MarkAttendaceService {
             filename: 'attendance_audio.wav',
           ),
         ); // Use correct field name
+        debugPrint('[MarkAttendance] Built multipart request for auto flow');
         return req;
       } else {
         final req = http.Request('POST', Uri.parse(url));
@@ -343,6 +370,7 @@ class MarkAttendaceService {
           'device_id': deviceIdEncoded,
           if (reason != null) 'regulization_commet': reason,
         });
+        debugPrint('[MarkAttendance] Built JSON request for manual flow');
         return req;
       }
     }
@@ -353,6 +381,9 @@ class MarkAttendaceService {
     Future<void> processSuccessResponse(String responseBody) async {
       final responseData = jsonDecode(responseBody);
       if (responseData['data'] == true && responseData['code'] == 100) {
+        debugPrint(
+          '[MarkAttendance] Success response for slug=$lectureSlug initiator=$initiator',
+        );
         showSnackbar(
           initiator == 'auto'
               ? 'Attendance marked!'
@@ -361,6 +392,7 @@ class MarkAttendaceService {
         );
         await fetchTimetableData(showLoading: false); // Refresh silently
       } else {
+        debugPrint('[MarkAttendance] Unexpected success shape, throwing');
         throw Exception(
           responseData['message'] ??
               (initiator == 'auto' ? 'Failed to mark' : 'Failed to submit'),
@@ -373,7 +405,9 @@ class MarkAttendaceService {
       if (isMarkingLecture[lectureSlug] == null) return;
       // --- Initial Attempt ---
       http.BaseRequest request = buildRequest(currentToken);
-      //debugprint("Attempting API Request (Initial)");
+      debugPrint(
+        '[MarkAttendance] Sending initial request (type=${request is http.MultipartRequest ? 'multipart' : 'json'})',
+      );
       http.StreamedResponse streamedResponse = await (request
                   is http.MultipartRequest
               ? request.send()
@@ -389,7 +423,7 @@ class MarkAttendaceService {
       final int statusCode = response.statusCode;
       final String responseBody = response.body;
 
-      //debugprint("API Response Status (Initial): $statusCode");
+      debugPrint('[MarkAttendance] Initial response status=$statusCode');
       // Avoid printing large bodies in production logs
       // //debugprint("API Response Body (Initial): $responseBody");
 
@@ -398,7 +432,9 @@ class MarkAttendaceService {
         await processSuccessResponse(responseBody); // Process success
       } else if (statusCode == 401 || statusCode == 403) {
         // --- Handle Auth Error & Retry ---
-        //debugprint("Received 401/403. Attempting token refresh...");
+        debugPrint(
+          '[MarkAttendance] 401/403 received. Attempting token refresh...',
+        );
         // showSnackbar(
         //   "Session may have expired. Refreshing...",
         //   isError: false,
@@ -407,7 +443,7 @@ class MarkAttendaceService {
         final refreshResult = await authService.attemptTokenRefresh();
 
         if (refreshResult == RefreshStatus.success) {
-          //debugprint("Refresh successful. Retrying original request...");
+          debugPrint('[MarkAttendance] Token refresh successful. Retrying...');
           // Reload token via callback - This updates the token in the SCREEN'S state
           await loadAccessToken();
           String? newAccessToken =
@@ -426,7 +462,7 @@ class MarkAttendaceService {
 
           // Build retry request with NEW token
           http.BaseRequest retryRequest = buildRequest(currentToken);
-          //debugprint("Attempting API Request (Retry)");
+          debugPrint('[MarkAttendance] Sending retry request');
 
           // Send Retry Request
           http.StreamedResponse retryStreamedResponse = await (retryRequest
@@ -444,7 +480,7 @@ class MarkAttendaceService {
           int retryStatusCode = retryResponse.statusCode;
           String retryResponseBody = retryResponse.body;
 
-          //debugprint("API Response Status (Retry): $retryStatusCode");
+          debugPrint('[MarkAttendance] Retry response status=$retryStatusCode');
           // //debugprint("API Response Body (Retry): $retryResponseBody");
 
           // Handle Retry Response
@@ -459,7 +495,7 @@ class MarkAttendaceService {
             } catch (_) {}
             // Decide if we should logout here or just show error
             if (retryStatusCode == 401 || retryStatusCode == 403) {
-              //debugprint("Retry failed with 401/403. Logging out.");
+              debugPrint('[MarkAttendance] Retry 401/403. Logging out...');
               await authService.clearTokens();
               if (context.mounted) {
                 Navigator.pushAndRemoveUntil(
@@ -482,7 +518,7 @@ class MarkAttendaceService {
           }
         } else {
           // Refresh failed, logout
-          //debugprint("Refresh failed. Logging out.");
+          debugPrint('[MarkAttendance] Token refresh failed. Logging out...');
           await authService.clearTokens();
           if (context.mounted) {
             Navigator.pushAndRemoveUntil(
@@ -508,11 +544,71 @@ class MarkAttendaceService {
         throw Exception(errorMessage.toString());
       }
     } on TimeoutException {
-      // Handle timeout error
-      showSnackbar("Request timed out. Please try again.", isError: true);
+      // Handle timeout as slow internet; if auto flow, enqueue and fallback to manual
+      debugPrint(
+        '[MarkAttendance] Request timed out. Enqueuing for later and falling back to manual.',
+      );
+      if (initiator == 'auto' &&
+          locationData != null &&
+          audioBytes != null &&
+          recordingStartTimeMillis != null) {
+        try {
+          // 1) Enqueue the auto payload for later background upload
+          await PendingQueueService.instance.enqueueAutoMark(
+            lectureSlug: lectureSlug,
+            deviceIdEncoded: deviceIdEncoded,
+            latitude: locationData.latitude ?? 0,
+            longitude: locationData.longitude ?? 0,
+            recordingStartTimeMillis: recordingStartTimeMillis,
+            audioBytes: audioBytes,
+          );
+        } catch (e) {
+          debugPrint('[MarkAttendance] Failed to enqueue auto data: $e');
+        }
+        debugPrint('[MarkAttendance] Auto mark data enqueued due to timeout');
+        try {
+          // 2) Reuse internal API helper to submit manual fallback with reason "Slow Internet"
+          await _makeApiRequestWithRetryInternal(
+            context: context,
+            setState: setState,
+            isMarkingLecture: isMarkingLecture,
+            markingInitiator: markingInitiator,
+            resetMarkingState: resetMarkingState,
+            showSnackbar: showSnackbar,
+            fetchTimetableData: fetchTimetableData,
+            loadAccessToken: loadAccessToken,
+            authService: authService,
+            lectureSlug: lectureSlug,
+            initiator: 'manual',
+            url: '$backendBaseUrl/api/manage/session/mark_for_regulization/',
+            initialAccessToken: currentToken,
+            deviceIdEncoded: deviceIdEncoded,
+            reason: 'Slow Internet',
+            suppressResetOnFinally: true,
+          );
+        } catch (e) {
+          debugPrint('[MarkAttendance] Manual fallback failed: $e');
+        }
+
+        // 3) Opportunistically process queue (non-blocking behavior)
+        try {
+          await PendingQueueService.instance.processPendingIfConnected(
+            getAccessToken: () async => await loadAccessToken(),
+            refreshTokens: () async {
+              final res = await authService.attemptTokenRefresh();
+              return res == RefreshStatus.success;
+            },
+          );
+        } catch (e) {
+          debugPrint('[MarkAttendance] Queue processing threw: $e');
+        }
+      } else {
+        // Non-auto flows: keep existing behavior
+        showSnackbar("Request timed out. Please try again.", isError: true);
+      }
     } catch (e) {
       // Catch all errors from API call, refresh, or retry
-      //debugprint('API Request/Retry Error: ${e.toString()}');
+      debugPrint('[MarkAttendance] Error during request/retry: $e');
       showSnackbar(
         e is Exception
             ? e.toString().replaceFirst('Exception: ', '')
@@ -520,7 +616,13 @@ class MarkAttendaceService {
         isError: true,
       );
     } finally {
-      resetMarkingState(lectureSlug);
+      if (!suppressResetOnFinally) {
+        debugPrint('[MarkAttendance] Resetting state for slug=$lectureSlug');
+        resetMarkingState(lectureSlug);
+      }
+      debugPrint(
+        '[MarkAttendance] _makeApiRequestWithRetryInternal end slug=$lectureSlug initiator=$initiator',
+      );
     }
   }
 }

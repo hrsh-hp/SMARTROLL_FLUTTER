@@ -47,18 +47,19 @@
 		<true />
 		<!-- Location Permissions -->
 		<key>NSLocationWhenInUseUsageDescription</key>
-		<string>This app needs access to location to mark attendance accurately.</string>
+		<string>This app needs access to location to mark attendance.</string>
 		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 		<string>This app needs location access for attendance marking.</string>
 
-		<!-- Optional: Background Location (ONLY IF NEEDED) -->
+		<!-- Optional: Background Location and Audio(ONLY IF NEEDED) -->
 		<key>UIBackgroundModes</key>
 		<array>
 			<string>location</string>
+			<string>audio</string>
 		</array>
 		<!-- Add Microphone Usage Description -->
 		<key>NSMicrophoneUsageDescription</key>
-		<string>This app needs access to the microphone for attendance marking for verification.</string>
+		<string>This app needs access to the microphone for attendance marking.</string>
 
 		<!-- Deep Linking (if app handles login redirect) -->
 		<key>CFBundleURLTypes</key>
@@ -77,12 +78,6 @@
 			</dict>
 			<!-- You can add more <dict> entries here if you support multiple schemes -->
 		</array>
-		<!-- Add Just Audio Background Mode -->
-		<key>UIBackgroundModes</key>
-		<array>
-			<string>audio</string>
-		</array>
-
 		<!-- Jailbroken check -->
 		<key>LSApplicationQueriesSchemes</key>
 		<array>
