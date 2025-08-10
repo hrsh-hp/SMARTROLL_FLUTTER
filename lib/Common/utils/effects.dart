@@ -384,3 +384,41 @@ class _ListLoadingShimmerState extends State<ListLoadingShimmer>
     );
   }
 }
+
+class RotatingIcon extends StatefulWidget {
+  final IconData icon;
+  final Color color;
+  const RotatingIcon({super.key, required this.icon, this.color = Colors.black});
+
+  @override
+  State<RotatingIcon> createState() => _RotatingIconState();
+}
+
+// rotating icon for loading
+class _RotatingIconState extends State<RotatingIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat(); // This makes it spin forever
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RotationTransition(
+      turns: _controller,
+      child: Icon(widget.icon, size: 40, color: widget.color),
+    );
+  }
+}

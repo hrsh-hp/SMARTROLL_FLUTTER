@@ -624,47 +624,64 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     );
   }
 
-  // Reconneting overlay for socker reconnetion
   Widget _buildReconnectingOverlay() {
-    // This widget will be built inside the Stack, so it will cover the screen.
     return Positioned.fill(
-      // IgnorePointer prevents any taps from passing through to the UI below when the overlay is visible.
-      child: IgnorePointer(
-        ignoring: _connectionState != SocketConnectionState.reconnecting,
-        // AnimatedOpacity provides a smooth fade-in and fade-out effect.
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 300),
-          opacity:
-              _connectionState == SocketConnectionState.reconnecting
-                  ? 1.0
-                  : 0.0,
-          child: BackdropFilter(
-            // The blur effect itself. Adjust sigma values for more/less blur.
-            filter: ui.ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+      // Use a BackdropFilter for a modern blur effect
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+        child: Container(
+          color: Colors.black.withOpacity(0.2), // A much softer overlay color
+          child: Center(
             child: Container(
-              // A subtle color overlay on top of the blur to improve text contrast.
-              color: Colors.black.withOpacity(0.2),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 3.0,
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Connection lost. Reconnecting...',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
-                        fontSize: 17,
-                        fontWeight: FontWeight.w500,
-                        decoration: TextDecoration.none,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16.0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 15,
+                    spreadRadius: 5,
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Use a more visually interesting animated icon
+                  SizedBox(
+                    width: 100,
+                    height: 40,
+                    child: ShimmerWidget(
+                      // Assuming ShimmerWidget is correctly defined
+                      child: Image.asset(
+                        'assets/LOGO.webp', // Assuming this asset exists
+                        // width: MediaQuery.of(context).size.width,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Reconnecting...',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Connection was lost. Please wait.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.black54,
+                      decoration: TextDecoration.none,
+                      fontWeight: FontWeight.normal,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
