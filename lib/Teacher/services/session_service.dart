@@ -159,6 +159,17 @@ class SessionService {
 
   Future<String> _saveBytesToTempFile(Uint8List bytes, String sessionId) async {
     final tempDir = await getTemporaryDirectory();
+    // Delete old chirp if exists
+    if (_tempChirpFilePath != null) {
+      try {
+        final oldFile = File(_tempChirpFilePath!);
+        if (await oldFile.exists()) {
+          await oldFile.delete();
+        }
+      } catch (e) {
+        debugPrint("⚠️ Error deleting old chirp file: $e");
+      }
+    }
     // Use a unique name to avoid conflicts
     final filePath = '${tempDir.path}/chirp_$sessionId.wav';
     final file = File(filePath);
@@ -170,9 +181,9 @@ class SessionService {
 
   // --- UPDATED HELPER METHOD: Play from file ---
   Future<void> _playChirpFromFile(String filePath) async {
-    await _chirpPlayer.setFilePath(filePath);
+    await _chirpPlayer.setFilePath(filePath, preload: true);
     await _chirpPlayer.setLoopMode(LoopMode.one);
-    await _chirpPlayer.setVolume(0.8);
+    await _chirpPlayer.setVolume(1.0);
     _chirpPlayer.play();
   }
 

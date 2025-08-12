@@ -54,16 +54,19 @@ class SocketService {
 
     _socket = IO.io('$backendBaseUrl/client', <String, dynamic>{
       'transports': ['websocket'],
-      'autoConnect': false, // We will connect manually
+      // 'autoConnect': false, // We will connect manually
       'withCredentials': true,
-      'forceNew': true, // Force a new connection
+      // 'forceNew': false, // Force a new connection
       'reconnection': true,
       'reconnectionAttempts': 5, // Try to reconnect 5 times
-      'reconnectionDelay': 2000, // Wait 2 seconds before each reconnection
+      'reconnectionDelay': 1000, // Wait 2 seconds before each reconnection
       'reconnectionDelayMax': 5000, // Max delay of 5 seconds
-      'timeout': 10000, // 10 seconds timeout for connection
+      // 'timeout': 10000, // 10 seconds timeout for connection
     });
 
+    _socket!.onAny((event, data) {
+      debugPrint('Socket event: $event, data: $data');
+    });
     _socket!.on('connect_error', (error) {
       debugPrint("❌ Socket Connect Error: $error");
       final errorMessage =
@@ -96,6 +99,10 @@ class SocketService {
       });
     });
 
+    _socket!.on('reconnect_attempt', (attemptNumber) {
+      debugPrint('Socket reconnecting... attempt $attemptNumber');
+      _connectionStateController.add(SocketConnectionState.reconnecting);
+    });
     _socket!.on('reconnecting', (attemptNumber) {
       debugPrint('Socket reconnecting... attempt $attemptNumber');
       _connectionStateController.add(SocketConnectionState.reconnecting);
@@ -103,6 +110,13 @@ class SocketService {
 
     _socket!.on('reconnect_failed', (_) {
       debugPrint('❌ All reconnection attempts failed.');
+      _connectionStateController.add(SocketConnectionState.failed);
+      _errorController.add(
+        "Could not reconnect to the session. Please try again.",
+      );
+    });
+    _socket!.on('reconnect_error', (e) {
+      debugPrint('❌Error in reconnection: $e');
       _connectionStateController.add(SocketConnectionState.failed);
       _errorController.add(
         "Could not reconnect to the session. Please try again.",
@@ -139,22 +153,6 @@ class SocketService {
           'count': markedAttendances.length,
         });
       }
-      // debugPrint('Received ongoing_session_data');
-      // debugPrint('Data: ${data['data']['data']['data']['marked_attendances']}');
-      // final sessionDetails = data['data']['data']['data'];
-      // final List markedAttendances =
-      //     (sessionDetails['marked_attendances'] as List?) ?? [];
-      // final List pendingRequests =
-      //     (sessionDetails['pending_regulization_requests'] as List?) ?? [];
-
-      // for (var student in markedAttendances) {
-      //   _defaultStudentsController.add(student);
-      //   debugPrint('Adding student: $_defaultStudentsController');
-      // }
-      // for (var request in pendingRequests) {
-      //   _manualRequestsController.add(request);
-      // }
-      // _activeStudentCountController.add(markedAttendances.length);
     });
 
     _socket!.on('mark_attendance', (data) {
@@ -226,8 +224,8 @@ class SocketService {
       // }
     });
 
-    _socket!.onDisconnect((_) async {
-      debugPrint('Socket disconnected ');
+    _socket!.onDisconnect((data) async {
+      debugPrint('❌ Socket disconnected $data');
       if (_connectionCompleter?.isCompleted ?? false) {
         _connectionStateController.add(SocketConnectionState.reconnecting);
       } else {

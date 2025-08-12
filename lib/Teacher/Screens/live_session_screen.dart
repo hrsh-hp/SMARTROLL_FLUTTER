@@ -32,7 +32,6 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
   final List<Map<String, dynamic>> _manualRequests = [];
   int _activeStudentCount = 0;
   bool _isLoading = true;
-  String? _errorMessage;
   String? _authToken; // Store the auth token for reuse
   bool _isPopping = false;
 
@@ -173,7 +172,6 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
 
     setState(() {
       _isLoading = false;
-      _errorMessage = null;
       final index = _defaultStudents.indexWhere(
         (s) => s['slug'] == student['slug'],
       );
@@ -211,7 +209,6 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     if (!mounted) return;
     setState(() {
       _isLoading = false;
-      _errorMessage = null;
       final index = _manualRequests.indexWhere(
         (r) => r['slug'] == request['slug'],
       );
