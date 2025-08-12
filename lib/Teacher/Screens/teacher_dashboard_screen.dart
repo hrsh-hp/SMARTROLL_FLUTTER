@@ -336,7 +336,12 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: Icon(
+              Icons.logout,
+              color:
+                  Theme.of(context).appBarTheme.iconTheme?.color ??
+                  Theme.of(context).colorScheme.onSurface,
+            ),
             tooltip: 'Logout',
             onPressed: () {
               DialogUtils.showLogoutConfirmationDialog(context);
@@ -363,7 +368,12 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
           decoration: BoxDecoration(
             color: Theme.of(context).scaffoldBackgroundColor,
             border: Border(
-              bottom: BorderSide(color: Colors.grey.shade200, width: 1),
+              bottom: BorderSide(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withOpacity(0.08),
+                width: 1,
+              ),
             ),
           ),
           child: SizedBox(
@@ -389,8 +399,10 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                     decoration: BoxDecoration(
                       color:
                           isSelected
-                              ? Theme.of(context).primaryColor
-                              : Colors.grey.shade200,
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(
+                                context,
+                              ).colorScheme.surfaceVariant.withOpacity(0.6),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
@@ -403,8 +415,10 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                             fontWeight: FontWeight.bold,
                             color:
                                 isSelected
-                                    ? Colors.white.withOpacity(0.8)
-                                    : Colors.black54,
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface.withOpacity(0.6),
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -413,7 +427,10 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: isSelected ? Colors.white : Colors.black,
+                            color:
+                                isSelected
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -424,8 +441,10 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                             fontWeight: FontWeight.bold,
                             color:
                                 isSelected
-                                    ? Colors.white.withOpacity(0.8)
-                                    : Colors.black54,
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface.withOpacity(0.6),
                           ),
                         ),
                       ],
@@ -507,7 +526,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
               message,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: colorScheme.onSurface.withOpacity(0.7),
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 32),
@@ -517,8 +536,8 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                 label: const Text('Retry'),
                 onPressed: () => _fetchTimetableForDay(_selectedDate),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: colorScheme.error,
-                  side: BorderSide(color: colorScheme.error.withOpacity(0.5)),
+                  foregroundColor: Theme.of(context).colorScheme.primary,
+                  side: BorderSide(color: colorScheme.error),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
                     vertical: 12,
@@ -538,7 +557,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
     return Card(
       margin: const EdgeInsets.only(bottom: 16.0),
       elevation: 4,
-      color: Colors.grey.shade50,
+      color: Theme.of(context).colorScheme.surface,
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
         key: PageStorageKey(branchName),
@@ -550,10 +569,10 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
         },
         title: Text(
           branchName,
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 14,
-            color: Colors.black,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
         children:
@@ -581,23 +600,27 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
     final sessionStatus = session['active'];
     String buttonText;
     VoidCallback? onPressed;
-    Color buttonColor = Theme.of(context).primaryColor;
+    Color buttonColor = Theme.of(context).colorScheme.primary;
+    IconData? btnIcon;
 
     switch (sessionStatus) {
       case 'pre':
         buttonText = 'Start Session';
         onPressed = () => _handleStartSession(context, lecture);
+        btnIcon = Icons.play_circle_fill;
         break;
       case 'ongoing':
         buttonText = 'Join Session';
         buttonColor = Colors.blue.shade800;
         onPressed = () => _handleStartSession(context, lecture);
+        // btnIcon = Icons.circle;
         break;
       case 'post':
       default:
-        buttonText = 'Session Ended';
-        buttonColor = Colors.grey;
-        onPressed = null; // Disabled
+        buttonText = ' Download Excel';
+        buttonColor = Theme.of(context).colorScheme.secondary;
+        btnIcon = Icons.file_download;
+        onPressed = null; //() => _handleDownloadExcel(context, lecture);
         break;
     }
 
@@ -657,15 +680,28 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
             ElevatedButton(
               onPressed: onPressed,
               style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.white,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 backgroundColor: buttonColor,
-                disabledBackgroundColor: Colors.grey.shade400,
+                disabledBackgroundColor: Theme.of(
+                  context,
+                ).disabledColor.withOpacity(0.4),
                 minimumSize: const Size(double.infinity, 44),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              child: Text(buttonText),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (btnIcon != null)
+                    Icon(
+                      btnIcon,
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    ),
+                  SizedBox(width: 8),
+                  Text(buttonText),
+                ],
+              ),
             ),
           ],
         ),
@@ -699,14 +735,20 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(msg),
-                backgroundColor: isError ? Colors.red : Colors.green,
+                backgroundColor:
+                    isError
+                        ? Theme.of(context).colorScheme.error
+                        : Theme.of(context).colorScheme.secondary,
               ),
             );
           },
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
         );
       }
       return; // Stop the process if permissions are not granted
@@ -756,7 +798,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(result),
-              backgroundColor: Colors.orange.shade800, // Use a warning color
+              backgroundColor: Theme.of(context).colorScheme.secondary,
               duration: const Duration(seconds: 4),
             ),
           );
@@ -784,7 +826,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: $userFriendlyMessage'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -798,25 +840,25 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
     String text = status.toUpperCase();
     switch (status.toLowerCase()) {
       case 'ongoing':
-        color = Colors.green;
+        color = Colors.green; // Keep semantic success green
         text = 'Active';
         break;
       case 'pre':
-        color = Colors.blue;
+        color = Colors.blue.shade700;
         text = 'Upcoming';
         break;
       case 'post':
-        color = Colors.grey;
+        color = Theme.of(context).disabledColor;
         text = 'Finished';
         break;
       default:
-        color = Colors.orange;
+        color = Theme.of(context).colorScheme.secondary;
     }
     return Chip(
       label: Text(
         text,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onPrimary,
           fontWeight: FontWeight.bold,
           fontSize: 12,
         ),
@@ -832,18 +874,21 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
     Color color;
     switch (type.toLowerCase()) {
       case 'lab':
-        color = Colors.purple.shade300;
+        color = Colors.purple[400]!;
         break;
       case 'tutorial':
-        color = Colors.orange.shade400;
+        color = Theme.of(context).colorScheme.secondary;
         break;
       default:
-        color = Colors.orange.shade400;
+        color = Colors.orangeAccent;
     }
     return Chip(
       label: Text(
         type.toUpperCase(),
-        style: const TextStyle(color: Colors.white, fontSize: 12),
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onPrimary,
+          fontSize: 12,
+        ),
       ),
       backgroundColor: color,
       padding: EdgeInsets.zero,
@@ -856,14 +901,26 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
   Widget _buildDetailRow(IconData icon, String label, String value) {
     return Row(
       children: [
-        Icon(icon, color: Colors.grey.shade600, size: 20),
+        Icon(
+          icon,
+          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+          size: 20,
+        ),
         const SizedBox(width: 8),
-        Text(label, style: TextStyle(color: Colors.grey.shade700)),
+        Text(
+          label,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+          ),
+        ),
         const SizedBox(width: 4),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -982,9 +1039,18 @@ class _ClassroomDropdownState extends State<ClassroomDropdown> {
 
     return Row(
       children: [
-        Icon(Icons.people_outline, color: Colors.grey.shade600, size: 20),
+        Icon(
+          Icons.people_outline,
+          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+          size: 20,
+        ),
         const SizedBox(width: 8),
-        Text('Classroom:', style: TextStyle(color: Colors.grey.shade700)),
+        Text(
+          'Classroom:',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+          ),
+        ),
         const SizedBox(width: 8),
         Expanded(
           child: Container(
@@ -994,7 +1060,12 @@ class _ClassroomDropdownState extends State<ClassroomDropdown> {
             ),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8.0),
-              border: Border.all(color: Colors.grey.shade300, width: 1),
+              border: Border.all(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withOpacity(0.12),
+                width: 1,
+              ),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(

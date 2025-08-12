@@ -23,7 +23,7 @@ class SecurityService {
     try {
       return await Rjsniffer.amICompromised() ?? false;
     } catch (e) {
-      //debugprint("Error checking compromised status: $e");
+      //debugPrint("Error checking compromised status: $e");
       return false; // Assume not compromised if check fails
     }
   }
@@ -32,7 +32,7 @@ class SecurityService {
     try {
       return await Rjsniffer.amIDebugged() ?? false;
     } catch (e) {
-      //debugprint("Error checking compromised status: $e");
+      //debugPrint("Error checking compromised status: $e");
       return false; // Assume not compromised if check fails
     }
   }
@@ -51,10 +51,10 @@ class SecurityService {
       );
       return isDevMode;
     } on PlatformException {
-      //debugprint("Failed to check developer mode: '${e.message}'.");
+      //debugPrint("Failed to check developer mode: '${e.message}'.");
       return false; // Assume disabled if check fails
     } catch (e) {
-      //debugprint("Unexpected error checking developer mode: $e");
+      //debugPrint("Unexpected error checking developer mode: $e");
       return false;
     }
   }
@@ -77,11 +77,11 @@ class NetwrokUtils {
     try {
       // Check connectivity status
       final connectivityResultList = await Connectivity().checkConnectivity();
-      //debugprint("Connectivity Check Result: $connectivityResultList");
+      //debugPrint("Connectivity Check Result: $connectivityResultList");
       if (connectivityResultList.contains(ConnectivityResult.none) &&
           connectivityResultList.length > 1) {
         // This state is unusual, treat as disconnected for safety? Or log a warning.
-        //debugprint( "Warning: Connectivity list contains 'none' along with other types.",);
+        //debugPrint( "Warning: Connectivity list contains 'none' along with other types.",);
         // Optionally filter out 'none' if other valid connections exist.
         // return connectivityResultList.where((r) => r != ConnectivityResult.none).toList();
       }
@@ -89,7 +89,7 @@ class NetwrokUtils {
       return connectivityResultList;
     } catch (e) {
       // Handle potential errors during the check itself (rare)
-      //debugprint("Error checking connectivity: $e");
+      //debugPrint("Error checking connectivity: $e");
       // Return 'none' or throw an exception depending on how you want callers to handle this failure
       return [];
     }
@@ -124,4 +124,8 @@ class UserFacingException implements Exception {
 
   @override
   String toString() => message;
+}
+
+class DeepLinkState {
+  static bool incomingLink = false;
 }

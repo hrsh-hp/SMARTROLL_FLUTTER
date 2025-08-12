@@ -4,6 +4,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:smartroll/Common/utils/constants.dart';
 import 'Common/Screens/splash_screen.dart';
 
 void main() {
@@ -51,22 +52,26 @@ class _MyAppState extends State<MyApp> {
     try {
       final initialUri = await _appLinks.getInitialLink();
       if (initialUri != null) {
-        //debugprint('Initial link received: $initialUri');
+        //debugPrint('Initial link received: $initialUri');
+        DeepLinkState.incomingLink = true;
         await _processLink(initialUri);
+        DeepLinkState.incomingLink = false;
       } else {
-        //debugprint('No initial link found.');
+        //debugPrint('No initial link found.');
       }
     } catch (e) {
-      //debugprint('Error getting initial link: $e');
+      //debugPrint('Error getting initial link: $e');
     }
 
     _linkSubscription = _appLinks.uriLinkStream.listen(
       (uri) {
-        //debugprint('Link received while running: $uri');
+        //debugPrint('Link received while running: $uri');
+        DeepLinkState.incomingLink = true;
         _processLink(uri);
+        DeepLinkState.incomingLink = false;
       },
       onError: (err) {
-        //debugprint('Error listening to link stream: $err');
+        //debugPrint('Error listening to link stream: $err');
       },
     );
   }
@@ -85,7 +90,7 @@ class _MyAppState extends State<MyApp> {
           await _storage.write(key: 'accessToken', value: accessToken);
           await _storage.write(key: 'refreshToken', value: refreshToken);
           await _storage.write(key: 'role', value: role);
-          //debugprint("Tokens stored successfully via deep link!");
+          //debugPrint("Tokens stored successfully via deep link!");
 
           // Use the navigator key to push a fresh instance of SplashScreen
           _navigatorKey.currentState?.pushAndRemoveUntil(
@@ -93,13 +98,13 @@ class _MyAppState extends State<MyApp> {
             (route) => false,
           );
         } catch (e) {
-          //debugprint("Failed to store tokens from link: $e");
+          //debugPrint("Failed to store tokens from link: $e");
         }
       } else {
-        //debugprint("Auth callback received but tokens are missing/empty: $uri");
+        //debugPrint("Auth callback received but tokens are missing/empty: $uri");
       }
     } else {
-      //debugprint("Received link is not the expected auth callback: $uri");
+      //debugPrint("Received link is not the expected auth callback: $uri");
     }
   }
 

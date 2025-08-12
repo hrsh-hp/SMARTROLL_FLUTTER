@@ -101,7 +101,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   Future<void> _loadAccessToken() async {
     // Use actual storage read
     _accessToken = await secureStorage.read(key: 'accessToken');
-    //debugprint("Access token loaded: ${_accessToken != null}");
+    //debugPrint("Access token loaded: ${_accessToken != null}");
   }
 
   // --- Initialization and Data Fetching (Unchanged from previous safe version) ---
@@ -131,9 +131,9 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
   Future<void> _getAndStoreDeviceId() async {
     try {
       _deviceId = await deviceIdService.getUniqueDeviceId();
-      //debugprint("Device ID: $_deviceId");
+      //debugPrint("Device ID: $_deviceId");
     } catch (e) {
-      //debugprint("Error getting device ID: $e");
+      //debugPrint("Error getting device ID: $e");
     }
   }
 
@@ -340,7 +340,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
       final parsedTime = DateFormat("HH:mm:ss").parse(timeString);
       return DateFormat("h:mm a").format(parsedTime);
     } catch (e) {
-      //debugprint("Error formatting time '$timeString': $e");
+      //debugPrint("Error formatting time '$timeString': $e");
       return timeString;
     }
   }
@@ -524,7 +524,7 @@ class _AttendanceMarkingScreenState extends State<AttendanceMarkingScreen>
         // Format date as 'MMM dd, yyyy' (Target format)
         sessionDate = DateFormat('MMM dd, yyyy').format(parsedDate);
       } catch (e) {
-        //debugprint("Error parsing session date: $sessionDate: $e");
+        //debugPrint("Error parsing session date: $sessionDate: $e");
         sessionDate =
             sessionData?['day']?.toString(); // Fallback to original string
       }

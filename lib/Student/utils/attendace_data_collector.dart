@@ -104,7 +104,7 @@ class AttendanceDataCollector {
 
     // --- 2. Check Location Service ---
     // Moved service check inside _getLocationInternal for better flow control
-    //debugprint("Permissions granted. Starting data collection...");
+    //debugPrint("Permissions granted. Starting data collection...");
 
     // --- 3. Collect Location and Audio Concurrently ---
     try {
@@ -115,7 +115,7 @@ class AttendanceDataCollector {
         const Duration(seconds: 30),
         onTimeout: () {
           // Overall timeout for both tasks
-          //debugprint("Data collection (location+audio) timed out.");
+          //debugPrint("Data collection (location+audio) timed out.");
           // Return a specific timeout status if the combined operation times out
           throw TimeoutException('Data collection timed out');
         },
@@ -128,23 +128,23 @@ class AttendanceDataCollector {
       // Check location result first
       if (locationResult.status != AttendanceDataStatus.success ||
           locationResult.locationData == null) {
-        //debugprint("Location collection failed: ${locationResult.status}");
+        //debugPrint("Location collection failed: ${locationResult.status}");
         return locationResult; // Return the specific location error result
       }
 
       // Check audio result
       if (audioResult.status != AttendanceDataStatus.success ||
           audioResult.audioBytes == null) {
-        //debugprint("Audio recording failed: ${audioResult.status}");
+        //debugPrint("Audio recording failed: ${audioResult.status}");
         return audioResult; // Return the specific audio error result
       }
       if (audioResult.recordingStartTimeMillis == null) {
-        //debugprint("Audio recording failed: ${audioResult.status}");
+        //debugPrint("Audio recording failed: ${audioResult.status}");
         return audioResult; // Return the specific audio error result
       }
 
       // --- Success ---
-      //debugprint("Location and Audio collected successfully.");
+      //debugPrint("Location and Audio collected successfully.");
       return AttendanceDataResult(
         status: AttendanceDataStatus.success,
         locationData: locationResult.locationData,
@@ -157,7 +157,7 @@ class AttendanceDataCollector {
         errorMessage: "Data collection timed out.",
       );
     } catch (e) {
-      //debugprint("Unexpected error during data collection: $e");
+      //debugPrint("Unexpected error during data collection: $e");
       return AttendanceDataResult(
         status: AttendanceDataStatus.unknownError,
         errorMessage: "An unexpected error occurred: ${e.toString()}",
@@ -173,10 +173,10 @@ class AttendanceDataCollector {
     // Check Location Service
     bool serviceEnabled = await _location.serviceEnabled();
     if (!serviceEnabled) {
-      //debugprint("Location service disabled. Requesting service...");
+      //debugPrint("Location service disabled. Requesting service...");
       serviceEnabled = await _location.requestService();
       if (!serviceEnabled) {
-        //debugprint("Location service request denied by user.");
+        //debugPrint("Location service request denied by user.");
         return AttendanceDataResult(
           status: AttendanceDataStatus.locationServiceDisabled,
         );
@@ -184,7 +184,7 @@ class AttendanceDataCollector {
     }
 
     // Get Location Data
-    //debugprint("Location services OK. Getting location...");
+    //debugPrint("Location services OK. Getting location...");
     try {
       await _location.changeSettings(accuracy: LocationAccuracy.high);
       LocationData? locationData;
@@ -209,7 +209,7 @@ class AttendanceDataCollector {
       // --- Mock Location Check ---
       if (locationData.isMock == true) {
         // Check if explicitly true
-        //debugprint("Mock location detected!");
+        //debugPrint("Mock location detected!");
         return AttendanceDataResult(
           status: AttendanceDataStatus.locationIsMocked, // Use the new status
           errorMessage:
@@ -218,7 +218,7 @@ class AttendanceDataCollector {
       }
 
       // Log mock status even if false or null for debugging
-      //debugprint( "Location fetched: Lat ${locationData.latitude}, Lon ${locationData.longitude}, Mock: ${locationData.isMock}",);
+      //debugPrint( "Location fetched: Lat ${locationData.latitude}, Lon ${locationData.longitude}, Mock: ${locationData.isMock}",);
       return AttendanceDataResult(
         status: AttendanceDataStatus.success,
         locationData: locationData,
@@ -229,7 +229,7 @@ class AttendanceDataCollector {
         errorMessage: e.message,
       );
     } catch (e) {
-      //debugprint("Error getting location: $e");
+      //debugPrint("Error getting location: $e");
       return AttendanceDataResult(
         status: AttendanceDataStatus.locationError,
         errorMessage: e.toString(),
@@ -256,10 +256,10 @@ class AttendanceDataCollector {
       final Directory tempDir = await getTemporaryDirectory();
       final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
       tempPath = '${tempDir.path}/temp_attendance_audio_$timestamp.wav';
-      //debugprint("Audio recording temporary path: $tempPath");
+      //debugPrint("Audio recording temporary path: $tempPath");
       // --- End Get Temporary Directory ---
 
-      //debugprint("Starting audio recording to file...");
+      //debugPrint("Starting audio recording to file...");
       recordingStartTimeMillis = DateTime.now().millisecondsSinceEpoch;
 
       // --- Start Recording to File ---
@@ -278,7 +278,7 @@ class AttendanceDataCollector {
 
       // Check state after starting
       bool isRecording = await recorder.isRecording();
-      //debugprint("Audio recorder state after start: isRecording=$isRecording");
+      //debugPrint("Audio recorder state after start: isRecording=$isRecording");
       if (!isRecording) {
         // If it failed to start recording immediately
         throw Exception("Recorder failed to enter recording state.");
@@ -289,24 +289,24 @@ class AttendanceDataCollector {
       await Future.delayed(duration);
 
       // --- Stop Recording ---
-      //debugprint("Recording duration reached. Stopping recorder...");
+      //debugPrint("Recording duration reached. Stopping recorder...");
       // Stop recording, get the final path (might be null if stopped early/error)
       final String? finalPath = await recorder.stop();
-      //debugprint("Recorder stopped. Final path: $finalPath");
+      //debugPrint("Recorder stopped. Final path: $finalPath");
 
       // --- Read Bytes from File ---
       if (finalPath != null) {
         final File audioFile = File(finalPath);
         if (await audioFile.exists()) {
           final Uint8List audioBytes = await audioFile.readAsBytes();
-          //debugprint( "Successfully read ${audioBytes.length} bytes from temporary file.",);
+          //debugPrint( "Successfully read ${audioBytes.length} bytes from temporary file.",);
 
           // --- Delete Temporary File ---
           try {
             await audioFile.delete();
-            //debugprint("Temporary audio file deleted: $finalPath");
+            //debugPrint("Temporary audio file deleted: $finalPath");
           } catch (e) {
-            //debugprint(  "Warning: Failed to delete temporary audio file $finalPath: $e",);
+            //debugPrint(  "Warning: Failed to delete temporary audio file $finalPath: $e",);
           }
           // --- End Delete Temporary File ---
 
@@ -317,7 +317,7 @@ class AttendanceDataCollector {
             recordingStartTimeMillis: recordingStartTimeMillis,
           );
         } else {
-          //debugprint("Error: Temporary audio file does not exist after recording: $finalPath",);
+          //debugPrint("Error: Temporary audio file does not exist after recording: $finalPath",);
           return AttendanceDataResult(
             status: AttendanceDataStatus.recordingError,
             errorMessage: "Recorded audio file was not found.",
@@ -326,7 +326,7 @@ class AttendanceDataCollector {
         }
       } else {
         // recorder.stop() returned null, indicating an issue during recording/stopping
-        //debugprint("Error: recorder.stop() returned null.");
+        //debugPrint("Error: recorder.stop() returned null.");
         return AttendanceDataResult(
           status: AttendanceDataStatus.recordingError,
           errorMessage: "Recording process failed to complete successfully.",
@@ -334,17 +334,17 @@ class AttendanceDataCollector {
         );
       }
     } catch (e) {
-      //debugprint("Error during audio recording process: $e");
+      //debugPrint("Error during audio recording process: $e");
       // Attempt to clean up the temp file if path exists and error occurred
       if (tempPath != null) {
         try {
           final File tempFile = File(tempPath);
           if (await tempFile.exists()) {
             await tempFile.delete();
-            //debugprint("Cleaned up temporary audio file on error: $tempPath");
+            //debugPrint("Cleaned up temporary audio file on error: $tempPath");
           }
         } catch (cleanupError) {
-          //debugprint("Error during error cleanup (deleting temp file): $cleanupError",);
+          //debugPrint("Error during error cleanup (deleting temp file): $cleanupError",);
         }
       }
       return AttendanceDataResult(
@@ -368,9 +368,9 @@ class AttendanceDataCollector {
         await recorder.stop();
       }
       await recorder.dispose();
-      //debugprint("AudioRecorder disposed.");
+      //debugPrint("AudioRecorder disposed.");
     } catch (e) {
-      //debugprint("Error disposing recorder: $e");
+      //debugPrint("Error disposing recorder: $e");
     }
   }
 
@@ -435,7 +435,7 @@ class AttendanceDataCollector {
   //     }
 
   //     if (directory == null) {
-  //       //debugprint(
+  //       //debugPrint(
   //         "Could not determine suitable directory for saving debug audio.",
   //       );
   //       return null;
@@ -455,10 +455,10 @@ class AttendanceDataCollector {
   //     final File audioFile = File(filePath);
   //     await audioFile.writeAsBytes(audioBytes);
 
-  //     //debugprint("Debug audio saved to: $filePath");
+  //     //debugPrint("Debug audio saved to: $filePath");
   //     return filePath; // Return the path
   //   } catch (e) {
-  //     //debugprint("Error saving debug audio: $e");
+  //     //debugPrint("Error saving debug audio: $e");
   //     return null; // Return null on failure
   //   }
   // }

@@ -290,18 +290,25 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor:
+            theme.appBarTheme.backgroundColor ?? theme.colorScheme.surface,
         elevation: 1,
         title: Text(
           'Live Session (Active: $_activeStudentCount)',
-          style: const TextStyle(color: Colors.black87, fontSize: 18),
+          style: TextStyle(
+            color: theme.appBarTheme.titleTextStyle?.color ??
+                theme.colorScheme.onSurface,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-        iconTheme: IconThemeData(color: theme.primaryColor),
+        iconTheme: IconThemeData(color: theme.colorScheme.primary),
         bottom: TabBar(
           controller: _tabController,
-          labelColor: theme.primaryColor,
-          unselectedLabelColor: Colors.grey[600],
-          indicatorColor: theme.primaryColor,
+          labelColor: theme.colorScheme.primary,
+          unselectedLabelColor:
+              theme.colorScheme.onSurface.withOpacity(0.6),
+          indicatorColor: theme.colorScheme.primary,
           tabs: [
             const Tab(text: 'Default'),
             Tab(
@@ -313,11 +320,11 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
                     const SizedBox(width: 8),
                     CircleAvatar(
                       radius: 10,
-                      backgroundColor: theme.primaryColor,
+                      backgroundColor: theme.colorScheme.primary,
                       child: Text(
                         _manualRequests.length.toString(),
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: theme.colorScheme.onPrimary,
                           fontSize: 12,
                         ),
                       ),
@@ -392,8 +399,8 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade700,
-                foregroundColor: Colors.white,
+                backgroundColor: theme.colorScheme.error,
+                foregroundColor: theme.colorScheme.onError,
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
             ),
@@ -444,12 +451,14 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
           margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
           // --- ENHANCED STYLING FOR SUSPICIOUS CARDS ---
           elevation: isSuspicious ? 4.0 : 1.5,
-          color: Colors.white, // Subtle red background tint
+      color: Theme.of(context).colorScheme.surface, // Subtle background
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
             // A prominent red border that is impossible to miss
             side: BorderSide(
-              color: isSuspicious ? Colors.red.shade300 : Colors.transparent,
+        color: isSuspicious
+          ? Theme.of(context).colorScheme.error.withOpacity(0.6)
+          : Colors.transparent,
               width: 3,
             ),
           ),
@@ -512,15 +521,23 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
     dynamic value, {
     bool isSuspicious = false,
   }) {
+    final theme = Theme.of(context);
     // Use a consistent red color for the alert text
-    final Color valueColor =
-        isSuspicious ? Colors.red.shade700 : Colors.black87;
+    final Color valueColor = isSuspicious
+        ? theme.colorScheme.error
+        : theme.colorScheme.onSurface;
     final FontWeight fontWeight =
         isSuspicious ? FontWeight.w900 : FontWeight.bold;
 
     return Column(
       children: [
-        Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+        Text(
+          label,
+          style: TextStyle(
+            color: theme.colorScheme.onSurface.withOpacity(0.6),
+            fontSize: 12,
+          ),
+        ),
         const SizedBox(height: 4),
         Text(
           value is num ? value.toStringAsFixed(2) : '-',
@@ -597,23 +614,30 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
             Icon(
               icon,
               size: 64,
-              color: Colors.grey[400], // A soft, muted color for the icon
+              color:
+                  Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
             ),
             const SizedBox(height: 16),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              style: TextStyle(
+                fontSize: 14,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withOpacity(0.6),
+              ),
             ),
           ],
         ),
@@ -627,16 +651,22 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
       child: BackdropFilter(
         filter: ui.ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
         child: Container(
-          color: Colors.black.withOpacity(0.2), // A much softer overlay color
+      color: Theme.of(context)
+        .colorScheme
+        .onSurface
+        .withOpacity(0.2), // Softer overlay
           child: Center(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
               decoration: BoxDecoration(
-                color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(16.0),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+          color: Theme.of(context)
+            .colorScheme
+            .onSurface
+            .withOpacity(0.1),
                     blurRadius: 15,
                     spreadRadius: 5,
                   ),
@@ -658,22 +688,25 @@ class _LiveSessionScreenState extends State<LiveSessionScreen>
                     ),
                   ),
                   const SizedBox(height: 24),
-                  const Text(
+                  Text(
                     'Reconnecting...',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      color: Theme.of(context).colorScheme.onSurface,
                       decoration: TextDecoration.none,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Connection was lost. Please wait.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.black54,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withOpacity(0.6),
                       decoration: TextDecoration.none,
                       fontWeight: FontWeight.normal,
                     ),

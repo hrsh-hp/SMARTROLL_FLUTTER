@@ -80,11 +80,11 @@ class MarkAttendaceService {
       devModeEnabledNow = checksresults['isDeveloperModeEnabled'] ?? false;
       debuggerAttachedNow = checksresults['isDebuggerAttached'] ?? false;
     } catch (e) {
-      //debugprint("Error re-checking dev mode and debugger: $e");
+      //debugPrint("Error re-checking dev mode and debugger: $e");
     }
 
     if (devModeEnabledNow || debuggerAttachedNow) {
-      //debugprint("Security check failed at time of marking. Aborting.");
+      //debugPrint("Security check failed at time of marking. Aborting.");
       handleCriticalError(
         "Attendance marking disabled while ${devModeEnabledNow ? "Developer Options are active." : "USB/Wireless debugging is on."}",
       );
@@ -425,7 +425,7 @@ class MarkAttendaceService {
 
       debugPrint('[MarkAttendance] Initial response status=$statusCode');
       // Avoid printing large bodies in production logs
-      // //debugprint("API Response Body (Initial): $responseBody");
+      // //debugPrint("API Response Body (Initial): $responseBody");
 
       // --- Handle Response ---
       if (statusCode == 200 || statusCode == 201) {
@@ -481,7 +481,7 @@ class MarkAttendaceService {
           String retryResponseBody = retryResponse.body;
 
           debugPrint('[MarkAttendance] Retry response status=$retryStatusCode');
-          // //debugprint("API Response Body (Retry): $retryResponseBody");
+          // //debugPrint("API Response Body (Retry): $retryResponseBody");
 
           // Handle Retry Response
           if (retryStatusCode == 200 || retryStatusCode == 201) {

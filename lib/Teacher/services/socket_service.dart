@@ -1,5 +1,3 @@
-// lib/Teacher/Services/socket_service.dart (Create this new file)
-
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -40,6 +38,8 @@ class SocketService {
   Stream<void> get sessionEndedStream => _sessionEndedController.stream;
   Stream<String> get errorStream => _errorController.stream;
 
+  bool _isReConnect = false;
+
   Future<Map<String, dynamic>> connectAndListen({
     required String sessionId,
     required String authToken,
@@ -51,22 +51,21 @@ class SocketService {
 
     // Disconnect any existing socket
     if (_socket != null) _socket!.dispose();
-
     _socket = IO.io('$backendBaseUrl/client', <String, dynamic>{
       'transports': ['websocket'],
       // 'autoConnect': false, // We will connect manually
       'withCredentials': true,
       // 'forceNew': false, // Force a new connection
       'reconnection': true,
-      'reconnectionAttempts': 5, // Try to reconnect 5 times
+      // 'reconnectionAttempts': maxReconnectAttempts, // Try to reconnect 5 times
       'reconnectionDelay': 1000, // Wait 2 seconds before each reconnection
       'reconnectionDelayMax': 5000, // Max delay of 5 seconds
-      // 'timeout': 10000, // 10 seconds timeout for connection
+      'timeout': 10000, // 10 seconds timeout for connection
     });
 
-    _socket!.onAny((event, data) {
-      debugPrint('Socket event: $event, data: $data');
-    });
+    // _socket!.onAny((event, data) {
+    //   debugPrint('Socket event: $event, data: $data');
+    // });
     _socket!.on('connect_error', (error) {
       debugPrint("❌ Socket Connect Error: $error");
       final errorMessage =
@@ -85,49 +84,36 @@ class SocketService {
         'client': 'FE',
         'session_id': sessionId,
         'auth_token': authToken,
+        'isReConnect': _isReConnect,
       });
     });
 
-    _socket!.on('reconnect', (attemptNumber) {
-      debugPrint('✅ Socket reconnected on attempt $attemptNumber.');
-      _connectionStateController.add(SocketConnectionState.connected);
-      // Re-emit handshake to ensure server recognizes the new connection
-      _socket!.emit('socket_connection', {
-        'client': 'FE',
-        'session_id': sessionId,
-        'auth_token': authToken,
-      });
-    });
-
-    _socket!.on('reconnect_attempt', (attemptNumber) {
-      debugPrint('Socket reconnecting... attempt $attemptNumber');
-      _connectionStateController.add(SocketConnectionState.reconnecting);
-    });
-    _socket!.on('reconnecting', (attemptNumber) {
-      debugPrint('Socket reconnecting... attempt $attemptNumber');
+    _socket!.onReconnectAttempt((attemptNumber) {
+      debugPrint('Socket reconnect_attempt... attempt $attemptNumber');
+      _isReConnect = true; // Set this to true for reconnection attempts
       _connectionStateController.add(SocketConnectionState.reconnecting);
     });
 
-    _socket!.on('reconnect_failed', (_) {
+    _socket!.onReconnectFailed((_) {
       debugPrint('❌ All reconnection attempts failed.');
+
+      // 1. Broadcast the final failed state.
       _connectionStateController.add(SocketConnectionState.failed);
+
+      // 2. Push a user-friendly error to the error stream to trigger the screen pop.
       _errorController.add(
-        "Could not reconnect to the session. Please try again.",
+        "Could not reconnect to the session. Please check your connection.",
       );
     });
-    _socket!.on('reconnect_error', (e) {
-      debugPrint('❌Error in reconnection: $e');
-      _connectionStateController.add(SocketConnectionState.failed);
-      _errorController.add(
-        "Could not reconnect to the session. Please try again.",
-      );
+    _socket!.onReconnectError((e) {
+      debugPrint("Reconnect attempt failed: $e");
     });
 
     // --- LISTEN TO ALL SERVER EVENTS ---
 
     _socket!.on('ongoing_session_data', (data) {
       debugPrint('Received ongoing_session_data, connection successful.');
-
+      _isReConnect = false;
       final Map<String, dynamic>? sessionDetails =
           data?['data']?['data']?['data'];
       if (sessionDetails == null) {
@@ -216,34 +202,14 @@ class SocketService {
         // If the handshake is already complete, push to the live error stream.
         _errorController.add(errorMessage);
       }
-      // if (data?['status_code'] == 500) {
-      //   // Handle specific error code if needed
-      //   debugPrint('Received 500 error, disconnecting socket.');
-      //   disconnect();
-      //   // _errorController.add(errorMessage);
-      // }
     });
 
     _socket!.onDisconnect((data) async {
       debugPrint('❌ Socket disconnected $data');
-      if (_connectionCompleter?.isCompleted ?? false) {
-        _connectionStateController.add(SocketConnectionState.reconnecting);
-      } else {
-        // This handles disconnects during the initial handshake
-        if (!_connectionCompleter!.isCompleted) {
-          _connectionCompleter!.completeError("Connection lost unexpectedly.");
-        }
+      // This handles disconnects during the initial handshake
+      if (!_connectionCompleter!.isCompleted) {
+        _connectionCompleter!.completeError("Connection lost unexpectedly.");
       }
-      // Wait for a moment to allow any pending client_error to be processed.
-      // await Future.delayed(const Duration(milliseconds: 6000));
-
-      // if (_lastKnownError != null) {
-      //   _errorController.add(_lastKnownError!);
-      //   debugPrint('Pushing specific error to UI: "$_lastKnownError"');
-      // } else {
-      //   _errorController.add('Connection to session lost unexpectedly.');
-      //   debugPrint('Pushing generic disconnect error to UI.');
-      // }
     });
 
     _socket!.connect();
@@ -314,5 +280,6 @@ class SocketService {
   void disconnect() {
     _socket?.disconnect();
     _socket = null;
+    _connectionCompleter = null;
   }
 }

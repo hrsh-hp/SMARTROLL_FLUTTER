@@ -73,9 +73,9 @@ class _SplashScreenState extends State<SplashScreen>
       Map<String, bool> securityStatus = {};
       try {
         securityStatus = await _securityService.runAllChecks();
-        //debugprint("Security Status: Compromised: ${securityStatus['isCompromised']}, DevMode: ${securityStatus['isDeveloperModeEnabled']}, Debugger ${securityStatus['isDebuggerAttached']}",);
+        //debugPrint("Security Status: Compromised: ${securityStatus['isCompromised']}, DevMode: ${securityStatus['isDeveloperModeEnabled']}, Debugger ${securityStatus['isDebuggerAttached']}",);
       } catch (e) {
-        //debugprint("Error running security checks: $e");
+        //debugPrint("Error running security checks: $e");
         securityStatus = {
           'isCompromised': false,
           'isDeveloperModeEnabled': false,
@@ -86,7 +86,7 @@ class _SplashScreenState extends State<SplashScreen>
       if (securityStatus['isCompromised'] == true &&
           securityStatus['isDeveloperModeEnabled'] == true &&
           securityStatus['isDebuggerAttached'] == true) {
-        //debugprint( "Security check failed (Root/Jailbreak or DevMode ON). Blocking app.",);
+        //debugPrint( "Security check failed (Root/Jailbreak or DevMode ON). Blocking app.",);
         String msg =
             securityStatus['isCompromised'] == true
                 ? "on Rooted/Jailbroken Devices"
@@ -100,7 +100,7 @@ class _SplashScreenState extends State<SplashScreen>
         // --- 2. Connectivity Check ---
         final bool connected = await NetwrokUtils.isConnected();
         if (!mounted) return;
-        //debugprint("SplashScreen - Connectivity result: $connected");
+        //debugPrint("SplashScreen - Connectivity result: $connected");
         if (!connected) {
           // Check using the boolean result
           errorMessage =
@@ -112,7 +112,7 @@ class _SplashScreenState extends State<SplashScreen>
           if (!mounted) return;
 
           if (!serverAvailable) {
-            //debugprint("SplashScreen - Server unavailable.");
+            //debugPrint("SplashScreen - Server unavailable.");
             errorMessage =
                 "Cannot connect to the server. Please try again later.";
             checksPassed = false;
@@ -124,23 +124,23 @@ class _SplashScreenState extends State<SplashScreen>
 
             switch (tokenStatus) {
               case TokenStatus.valid:
-                //debugprint("SplashScreen - Token valid.");
+                //debugPrint("SplashScreen - Token valid.");
                 nextPage = await _getScreenForRole();
                 checksPassed =
                     true; // All checks passed, navigate to main screen
                 break;
 
               case TokenStatus.expiredOrInvalid:
-                //debugprint(   "SplashScreen - Token expired/invalid, attempting refresh.",  );
+                //debugPrint(   "SplashScreen - Token expired/invalid, attempting refresh.",  );
                 final refreshResult = await _authService.attemptTokenRefresh();
                 if (!mounted) return;
 
                 if (refreshResult == RefreshStatus.success) {
-                  //debugprint("SplashScreen - Refresh successful.");
+                  //debugPrint("SplashScreen - Refresh successful.");
                   nextPage = await _getScreenForRole();
                   checksPassed = true; // All checks passed after refresh
                 } else {
-                  //debugprint("SplashScreen - Refresh failed, logging out.");
+                  //debugPrint("SplashScreen - Refresh failed, logging out.");
                   await _authService.clearTokens();
                   nextPage = LoginScreen(); // Needs login
                   checksPassed = true; // Check didn't fail, just requires login
@@ -148,7 +148,7 @@ class _SplashScreenState extends State<SplashScreen>
                 break;
 
               case TokenStatus.noToken:
-                //debugprint("SplashScreen - No token found.");
+                //debugPrint("SplashScreen - No token found.");
                 nextPage = LoginScreen(); // Needs login
                 checksPassed =
                     true; // Check itself didn't fail, just requires login
@@ -157,7 +157,7 @@ class _SplashScreenState extends State<SplashScreen>
               case TokenStatus.networkError:
               case TokenStatus.unknownError:
                 // default:
-                //debugprint( "SplashScreen - Token check error ($tokenStatus), logging out.",);
+                //debugPrint( "SplashScreen - Token check error ($tokenStatus), logging out.",);
                 await _authService.clearTokens();
                 nextPage = LoginScreen(); // Needs login
                 checksPassed = true; // Treat as requiring login after error
@@ -168,7 +168,7 @@ class _SplashScreenState extends State<SplashScreen>
       }
     } catch (e) {
       // Catch unexpected errors during the orchestration
-      //debugprint("SplashScreen - Critical error: $e");
+      //debugPrint("SplashScreen - Critical error: $e");
       errorMessage =
           "An unexpected error occurred during startup: ${e.toString()}";
       checksPassed = false; // Critical error means checks failed

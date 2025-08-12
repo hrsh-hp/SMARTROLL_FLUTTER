@@ -45,7 +45,7 @@ class AuthService {
       final responseData = jsonDecode(response.body);
       return response.statusCode == 200 && responseData['data'] == true;
     } catch (e) {
-      //debugprint("AuthService - Server check failed: $e");
+      //debugPrint("AuthService - Server check failed: $e");
       return false;
     }
   }
@@ -56,7 +56,7 @@ class AuthService {
     try {
       accessToken = await _storage.read(key: 'accessToken');
       if (accessToken == null || accessToken.isEmpty) {
-        //debugprint("AuthService - Access token not found.");
+        //debugPrint("AuthService - Access token not found.");
         return TokenStatus.noToken;
       }
 
@@ -64,7 +64,7 @@ class AuthService {
       final verificationUrl = Uri.parse(
         '$_backendBaseUrl/api/check_token_authenticity',
       );
-      //debugprint("AuthService - Verifying token at: $verificationUrl");
+      //debugPrint("AuthService - Verifying token at: $verificationUrl");
 
       final response = await http
           .get(
@@ -73,7 +73,7 @@ class AuthService {
           )
           .timeout(const Duration(seconds: 5)); // Keep timeout reasonable
 
-      //debugprint( "AuthService - Token verification response: ${response.statusCode}",);
+      //debugPrint( "AuthService - Token verification response: ${response.statusCode}",);
       final responseData = jsonDecode(response.body);
 
       // Check status code and response body as before
@@ -86,18 +86,18 @@ class AuthService {
         // Consider 401/403 or explicit false from backend as expired/invalid
         return TokenStatus.expiredOrInvalid;
       } else {
-        //debugprint( "AuthService - Token verification failed with status: ${response.statusCode}",);
+        //debugPrint( "AuthService - Token verification failed with status: ${response.statusCode}",);
         return TokenStatus.unknownError;
       }
     } on TimeoutException {
-      //debugprint("AuthService - Token verification timed out.");
+      //debugPrint("AuthService - Token verification timed out.");
       return TokenStatus.networkError;
     } on http.ClientException {
       // More specific network error catch
-      //debugprint("AuthService - Network error during token verification: $e");
+      //debugPrint("AuthService - Network error during token verification: $e");
       return TokenStatus.networkError;
     } catch (e) {
-      //debugprint("AuthService - Error checking token status: $e");
+      //debugPrint("AuthService - Error checking token status: $e");
       return TokenStatus.unknownError;
     }
   }
@@ -108,7 +108,7 @@ class AuthService {
     try {
       refreshToken = await _storage.read(key: 'refreshToken');
       if (refreshToken == null || refreshToken.isEmpty) {
-        //debugprint("AuthService - Refresh token not found.");
+        //debugPrint("AuthService - Refresh token not found.");
         return RefreshStatus.noRefreshToken;
       }
 
@@ -116,7 +116,7 @@ class AuthService {
       final refreshUrl = Uri.parse(
         '$_backendBaseUrl/api/auth/api/token/refresh/',
       ); // Double check this path
-      //debugprint("AuthService - Attempting token refresh at: $refreshUrl");
+      //debugPrint("AuthService - Attempting token refresh at: $refreshUrl");
 
       final response = await http
           .post(
@@ -129,7 +129,7 @@ class AuthService {
             const Duration(seconds: 10),
           ); // Slightly longer timeout for refresh
 
-      //debugprint("AuthService - Token refresh response: ${response.statusCode}",);
+      //debugPrint("AuthService - Token refresh response: ${response.statusCode}",);
 
       if (response.statusCode == 200) {
         final responseBody = jsonDecode(response.body);
@@ -142,28 +142,28 @@ class AuthService {
           // Only update refresh token if a new one is provided
           if (newRefreshToken != null && newRefreshToken.isNotEmpty) {
             await _storage.write(key: 'refreshToken', value: newRefreshToken);
-            //debugprint("AuthService - Both tokens refreshed and stored.");
+            //debugPrint("AuthService - Both tokens refreshed and stored.");
           } else {
-            //debugprint("AuthService - Access token refreshed and stored.");
+            //debugPrint("AuthService - Access token refreshed and stored.");
           }
           return RefreshStatus.success;
         } else {
-          //debugprint( "AuthService - Refresh response OK, but new access token missing.",);
+          //debugPrint( "AuthService - Refresh response OK, but new access token missing.",);
           return RefreshStatus.failed; // Treat as failure
         }
       } else {
         // Any non-200 status means refresh failed
-        //debugprint(  "AuthService - Token refresh failed with status: ${response.statusCode}",);
+        //debugPrint(  "AuthService - Token refresh failed with status: ${response.statusCode}",);
         return RefreshStatus.failed;
       }
     } on TimeoutException {
-      //debugprint("AuthService - Token refresh timed out.");
+      //debugPrint("AuthService - Token refresh timed out.");
       return RefreshStatus.networkError;
     } on http.ClientException {
-      //debugprint("AuthService - Network error during token refresh: $e");
+      //debugPrint("AuthService - Network error during token refresh: $e");
       return RefreshStatus.networkError;
     } catch (e) {
-      //debugprint("AuthService - Error attempting token refresh: $e");
+      //debugPrint("AuthService - Error attempting token refresh: $e");
       return RefreshStatus.unknownError;
     }
   }
@@ -174,9 +174,9 @@ class AuthService {
       await _storage.delete(key: 'accessToken');
       await _storage.delete(key: 'refreshToken');
       await _storage.delete(key: 'role');
-      //debugprint("AuthService - Cleared tokens.");
+      //debugPrint("AuthService - Cleared tokens.");
     } catch (e) {
-      //debugprint("AuthService - Error clearing tokens: $e");
+      //debugPrint("AuthService - Error clearing tokens: $e");
     }
   }
 
@@ -185,7 +185,7 @@ class AuthService {
     try {
       return await _storage.read(key: 'role');
     } catch (e) {
-      //debugprint("AuthService - Error reading role: $e");
+      //debugPrint("AuthService - Error reading role: $e");
       return null;
     }
   }
